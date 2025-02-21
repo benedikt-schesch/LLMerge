@@ -6,6 +6,7 @@ repos/
 **.lock
 .workdir/
 **/file_conflicts
+**/conflict_blocks
 
 # Compiled class file
 *.class

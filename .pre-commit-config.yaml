@@ -61,16 +61,16 @@ repos:
     -   id: mypy
         language_version: python3.13
 
--   repo: https://github.com/terrencepreilly/darglint
-    rev: v1.8.1
+-   repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 25.1.0
     hooks:
-    -   id: darglint
+    -   id: black
         language_version: python3.13
 
-- repo: local
-  hooks:
-  - id: pylint-custom
-    name: pylint
-    entry: pylint --rcfile=.pylintrc
-    language: system
-    types: [python]
+-   repo: local
+    hooks:
+    -   id: pylint-custom
+        name: pylint
+        entry: pylint --rcfile=.pylintrc
+        language: system
+        types: [python]

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FindMergeCommits.py
+Usage:
+    python3 find_merges.py --repos repos.csv --output_file merges.csv --delete
 
 This script finds 2-parent merge commits in a set of GitHub repositories and outputs them
 to one consolidated CSV file.
@@ -148,7 +149,7 @@ def collect_branch_merges(
         List[str]
             A list of CSV rows for the
     """
-    rows:List[str] = []
+    rows: List[str] = []
     try:
         commits = list(repo.iter_commits(branch_ref.path))
     except GitCommandError:
@@ -192,7 +193,11 @@ def collect_all_branches(repo: Repo, repo_identifier: str) -> List[str]:
             notes
     """
     rows: List[str] = []
-    references = [r for r in repo.references if r.path.startswith(("refs/heads/", "refs/remotes/"))]
+    references = [
+        r
+        for r in repo.references
+        if r.path.startswith(("refs/heads/", "refs/remotes/"))
+    ]
     seen_heads = set()
     filtered_refs = []
     for ref in references:
@@ -206,7 +211,7 @@ def collect_all_branches(repo: Repo, repo_identifier: str) -> List[str]:
     return rows
 
 
-def get_repo(org: str, repo_name: str, log:bool=False) -> Repo:
+def get_repo(org: str, repo_name: str, log: bool = False) -> Repo:
     """
     Clone or reuse a local copy of 'org/repo_name' under repos_cache/org/repo_name.
     Returns a GitPython Repo object.
@@ -237,7 +242,9 @@ def get_repo(org: str, repo_name: str, log:bool=False) -> Repo:
         if github_user == "Bearer":
             clone_url = f"https://{github_token}@github.com/{org}/{repo_name}.git"
         else:
-            clone_url = f"https://{github_user}:{github_token}@github.com/{org}/{repo_name}.git"
+            clone_url = (
+                f"https://{github_user}:{github_token}@github.com/{org}/{repo_name}.git"
+            )
         try:
             return Repo.clone_from(clone_url, repo_dir, multi_options=["--no-tags"])
         except GitCommandError as e:
@@ -247,6 +254,7 @@ def get_repo(org: str, repo_name: str, log:bool=False) -> Repo:
         if log:
             logger.info(f"Reusing existing repo {org}/{repo_name} at {repo_dir}")
         return Repo(repo_dir)
+
 
 def process_repo(org: str, repo: str, delete_local: bool) -> List[str]:
     """
@@ -282,7 +290,8 @@ def process_repo(org: str, repo: str, delete_local: bool) -> List[str]:
         shutil.rmtree(rrepo.working_dir, ignore_errors=True)
     return rows
 
-def main() -> None: # pylint: disable=too-many-locals
+
+def main() -> None:  # pylint: disable=too-many-locals
     """
     Main entry point.
     Parses arguments, reads repos from CSV, processes them in parallel, and writes
