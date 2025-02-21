@@ -252,6 +252,7 @@ def process_repo(
 
     # If directory doesn't exist, clone; if it exists, reuse.
     if not local_dir.is_dir():
+        logger.info(f"{repo_name:<30} CLONING")
         local_dir.mkdir(parents=True, exist_ok=True)
         if github_user == "Bearer":
             clone_url = f"https://{github_token}@github.com/{org}/{repo}.git"
@@ -266,7 +267,7 @@ def process_repo(
             out_csv.write_text("idx,branch_name,merge_commit,parent_1,parent_2,notes\n")
             return
     else:
-        # Already exists, open it
+        logger.info(f"{repo_name:<30} REUSING LOCAL REPO")
         try:
             rrepo = Repo(local_dir)
         except Exception:  # pylint: disable=broad-except

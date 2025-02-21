@@ -1,5 +1,5 @@
 #!/bin/bash
-""" Script to collect all merges """
+# Script to collect all merges
 
 REPOS_DIR=$1
 OUT_DIR=$2
