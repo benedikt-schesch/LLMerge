@@ -3,7 +3,7 @@
 .gradle
 .venv
 repos/
-*.lock
+**.lock
 
 # Compiled class file
 *.class
