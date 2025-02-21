@@ -1,6 +1,6 @@
 # LLMerge
 
-![CI](https://github.com/benediktschesch/LLMerge/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/benedikt-schesch/LLMerge/actions/workflows/ci.yml/badge.svg)
 
 ## Installation
 
