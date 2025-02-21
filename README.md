@@ -1,5 +1,7 @@
 # LLMerge
 
+![CI](https://github.com/benediktschesch/LLMerge/actions/workflows/ci.yml/badge.svg)
+
 ## Installation
 
 Install uv following this [guide](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or simply use this quick command:
