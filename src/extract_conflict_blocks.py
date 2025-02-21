@@ -29,6 +29,8 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+from rich.progress import Progress
+
 
 def split_conflict_blocks(lines: List[str]) -> List[Tuple[int, int]]:
     """
@@ -179,7 +181,7 @@ def main():
     parser.add_argument(
         "--output_dir",
         required=True,
-        help="Output directory for <basename><n>.conflict and"
+        help="Output directory for <basename><n>.conflict and "
         "<basename><n>.resolved_conflict files",
     )
     parser.add_argument(
@@ -195,12 +197,19 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     conflict_files = sorted(conflict_dir.rglob("*.conflict"))
-    for cfile in conflict_files:
-        final_file = cfile.with_suffix(".final_merged")
-        if not final_file.exists():
-            sys.stderr.write(f"No matching .final_merged for {cfile}\n")
-            continue
-        process_conflict_file(cfile, final_file, args.context, output_dir)
+
+    with Progress() as progress:
+        task = progress.add_task(
+            "Processing conflict files...", total=len(conflict_files)
+        )
+        for cfile in conflict_files:
+            final_file = cfile.with_suffix(".final_merged")
+            if not final_file.exists():
+                sys.stderr.write(f"No matching .final_merged for {cfile}\n")
+                progress.advance(task)
+                continue
+            process_conflict_file(cfile, final_file, args.context, output_dir)
+            progress.advance(task)
 
     print(f"Done processing conflict files. Output is in {output_dir}")
 

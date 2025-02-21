@@ -28,6 +28,7 @@ from typing import List
 import pandas as pd
 from git import GitCommandError, Repo
 from loguru import logger
+from rich.progress import Progress
 
 from find_merges import get_repo
 
@@ -128,7 +129,7 @@ def reproduce_merge_and_extract_conflicts(
                 f"=> {merge_sha}, files: {conflict_files}"
             )
         else:
-            logger.warning(f"Merge error but no conflicts? {e}")
+            logger.warning(f"Git error. {e}")
 
     if conflict_files:
         copy_conflicting_files_and_goal(
@@ -232,13 +233,19 @@ def main():
 
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = [executor.submit(worker, (m[1], output_dir)) for m in df.iterrows()]
-        for f in concurrent.futures.as_completed(futures):
-            try:
-                result = f.result()
-                results.append(result)
-            except Exception as exc:
-                logger.error(f"Worker thread raised an exception: {exc}")
+        tasks = [(m[1], output_dir) for m in df.iterrows()]
+        futures = [executor.submit(worker, task) for task in tasks]
+        with Progress() as progress:
+            progress_task = progress.add_task(
+                "Extracting conflicts...", total=len(futures)
+            )
+            for f in concurrent.futures.as_completed(futures):
+                try:
+                    result = f.result()
+                    results.append(result)
+                except Exception as exc:
+                    logger.error(f"Worker thread raised an exception: {exc}")
+                progress.advance(progress_task)
 
     logger.info("Done extracting conflicts.")
 

@@ -1,2 +1,2 @@
 [MESSAGES CONTROL]
-disable=broad-except
+disable=broad-except,duplicate-code

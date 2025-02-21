@@ -40,6 +40,7 @@ from typing import List, Optional, Set
 import pandas as pd
 from git import Commit, GitCommandError, Repo
 from loguru import logger
+from rich.progress import Progress
 
 
 def read_github_credentials() -> tuple[str, str]:
@@ -246,7 +247,12 @@ def get_repo(org: str, repo_name: str, log: bool = False) -> Repo:
                 f"https://{github_user}:{github_token}@github.com/{org}/{repo_name}.git"
             )
         try:
-            return Repo.clone_from(clone_url, repo_dir, multi_options=["--no-tags"])
+            os.environ["GIT_TERMINAL_PROMPT"] = "0"
+            os.environ["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+            repo = Repo.clone_from(clone_url, repo_dir, multi_options=["--no-tags"])
+            repo.remote().fetch()
+            repo.remote().fetch("refs/pull/*/head:refs/remotes/origin/pull/*")
+            return repo
         except GitCommandError as e:
             logger.error(f"Failed to clone {org}/{repo_name}: {e}")
             raise
@@ -316,10 +322,11 @@ def main() -> None:  # pylint: disable=too-many-locals
         help="If set, remove local clones after processing (default: keep).",
     )
     parser.add_argument(
-        "--threads",
+        "--n_threads",
+        required=False,
         type=int,
-        default=-1,
-        help="Number of parallel threads to use (default: number of CPUs).",
+        default=None,
+        help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     args = parser.parse_args()
 
@@ -330,7 +337,8 @@ def main() -> None:  # pylint: disable=too-many-locals
     repos = df["repository"].tolist()
     logger.info(f"Found {len(repos)} repositories to process.")
 
-    num_workers = os.cpu_count() if args.threads == -1 else args.threads
+    num_workers = os.cpu_count() if args.n_threads is None else args.n_threads
+    logger.info(f"Using {num_workers} parallel threads.")
     all_rows: List[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
         future_to_repo = {}
@@ -342,8 +350,15 @@ def main() -> None:  # pylint: disable=too-many-locals
             org, repo = parts
             future = executor.submit(process_repo, org, repo, args.delete)
             future_to_repo[future] = repo_str
-        for future in concurrent.futures.as_completed(future_to_repo):
-            all_rows.extend(future.result())
+
+        # Add a rich progress bar to track repository processing.
+        with Progress() as progress:
+            task = progress.add_task(
+                "Processing repositories...", total=len(future_to_repo)
+            )
+            for future in concurrent.futures.as_completed(future_to_repo):
+                all_rows.extend(future.result())
+                progress.advance(task)
 
     # Write one big CSV file with a header.
     output_file = Path(args.output_file)
