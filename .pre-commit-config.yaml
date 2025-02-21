@@ -71,6 +71,6 @@ repos:
   hooks:
   - id: pylint-custom
     name: pylint
-    entry: pylint
+    entry: pylint --rcfile=.pylintrc
     language: system
     types: [python]

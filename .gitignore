@@ -4,6 +4,8 @@
 .venv
 repos/
 **.lock
+.workdir/
+**/file_conflicts
 
 # Compiled class file
 *.class

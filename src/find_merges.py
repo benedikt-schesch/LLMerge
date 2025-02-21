@@ -3,9 +3,8 @@
 """
 FindMergeCommits.py
 
-This script finds 2-parent merge commits in a set of GitHub repositories and outputs them to CSVs.
-It is a Python translation of a Java program of the same name, enhanced with parallel processing,
-environment-driven cache paths, and optional deletion of local clones.
+This script finds 2-parent merge commits in a set of GitHub repositories and outputs them
+to one consolidated CSV file.
 
 **Workflow**:
 1. Parse command line arguments (uses argparse).
@@ -18,18 +17,15 @@ environment-driven cache paths, and optional deletion of local clones.
    - Compute a "merge base" commit:
        - If none is found, mark the merge as "two initial commits".
        - If the base is identical to one of the parents, mark "a parent is the base".
-   - Write results to an output CSV file: <output-dir>/<org>/<repo>.csv
-4. If the --delete flag is set, remove the local clone after processing.
+   - Return merge rows in CSV format.
+4. Write all rows to a single output CSV file.
+5. If the --delete flag is set, remove the local clone after processing.
 
 **Parallelization**:
-- By default, processes up to n_cpus repositories in parallel (can be changed via --threads).
+- Processes up to n_cpus repositories in parallel (can be changed via --threads).
 
 **Authentication**:
-- The script uses a GitHub token for cloning
-        (Git operations require authentication for certain public or high-rate usage).
-- Credentials can be supplied by:
-  - A ~/.github-personal-access-token file (first line = username, second line = token),
-  - Or an environment variable GITHUB_TOKEN, in which case we treat username="Bearer".
+- Uses a GitHub token for cloning; see below for how credentials are read.
 """
 
 import argparse
@@ -38,7 +34,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional, Set
+from typing import List, Optional, Set
 
 import pandas as pd
 from git import Commit, GitCommandError, Repo
@@ -54,13 +50,11 @@ def read_github_credentials() -> tuple[str, str]:
       3) Exits if neither is available.
 
     Raises:
-        RuntimeError: If neither ~/.github-personal-access-token nor GITHUB_TOKEN
-            environment variable is found.
+        RuntimeError: If neither ~/.github-personal-access-token nor GITHUB_TOKEN is available.
 
     Returns:
-        tuple[str, str]: A tuple containing:
-            - username (str): GitHub username or "Bearer".
-            - token (str): Personal access token for GitHub authentication.
+        tuple[str, str]
+            A tuple (username, token) for GitHub authentication.
     """
     token_file = Path.home() / ".github-personal-access-token"
     env_token = os.getenv("GITHUB_TOKEN")
@@ -77,10 +71,10 @@ def read_github_credentials() -> tuple[str, str]:
 def fetch_pr_branches(repo: Repo) -> None:
     """
     Fetch pull request branches (refs/pull/*/head) into local references.
-    Equivalent to 'git fetch origin refs/pull/*/head:refs/remotes/origin/pull/*'.
 
     Arguments:
-        repo (Repo): The Git repository object.
+        repo: Repo
+            A GitPython Repo object.
     """
     try:
         repo.remotes.origin.fetch(refspec="refs/pull/*/head:refs/remotes/origin/pull/*")
@@ -89,42 +83,39 @@ def fetch_pr_branches(repo: Repo) -> None:
         pass
 
 
-def get_merge_base(repo: Repo,
-                   c1:Commit,
-                   c2:Commit) -> Optional[Commit]:
+def get_merge_base(repo: Repo, c1: Commit, c2: Commit) -> Optional[Commit]:
     """
-    Compute the "nearest common ancestor" (merge base) of two commits c1 and c2.
-    If no common ancestor exists (meaning the commits share no history),
-    return None ("two initial commits").
-    If the merge base is one of the parents themselves, note that separately.
+    Compute the nearest common ancestor (merge base) of two commits.
+    If no common ancestor exists, return None.
+    If the merge base is one of the parents, that is noted separately.
 
     Arguments:
-        repo (Repo): The Git repository object.
-        c1 (Commit): The first commit.
-        c2 (Commit): The second commit.
+        repo: Repo
+            A GitPython Repo object.
+        c1: Commit
+            The first commit.
+        c2: Commit
+            The second commit.
 
     Raises:
         RuntimeError: If the same commit is passed twice.
 
     Returns:
-        Optional[Commit]: The merge base commit, or None if no common ancestor exists
-            (or if c1 and c2 are the same commit).
+        Optional[Commit]
+            The merge base commit or None if no common ancestor.
     """
     if c1.hexsha == c2.hexsha:
         raise RuntimeError(f"Same commit passed twice: {c1.hexsha}")
-    # Gather ancestors of each commit in reverse topological order
     h1 = list(repo.iter_commits(c1))
     h1.reverse()
     h2 = list(repo.iter_commits(c2))
     h2.reverse()
-    # Quick membership checks
     s1 = {x.hexsha for x in h1}
     s2 = {x.hexsha for x in h2}
     if c2.hexsha in s1:
         return c2
     if c1.hexsha in s2:
         return c1
-    # Find last common prefix
     length = min(len(h1), len(h2))
     common_prefix = 0
     for i in range(length):
@@ -135,171 +126,180 @@ def get_merge_base(repo: Repo,
     return None if common_prefix == 0 else h1[common_prefix - 1]
 
 
-def write_branch_merges(
-    repo: Repo,
-    branch_ref,
-    writer,
-    start_idx: int,
-    written_shas: Set[str],
-) -> int:
+def collect_branch_merges(
+    repo: Repo, branch_ref, repo_identifier: str, written_shas: Set[str]
+) -> List[str]:
     """
-    For the given branch reference, find all 2-parent merges.
-    Write each merge to CSV with an index, incrementing from start_idx.
-    Return the new index after writing merges.
+    For the given branch reference, find all 2-parent merge commits.
+    Returns a list of CSV rows (without an index) for the branch.
+    Columns: repository, branch_name, merge_commit, parent_1, parent_2, notes
 
     Arguments:
-        repo (Repo): The Git repository object.
-        branch_ref: The branch reference object.
-        writer: The CSV writer object.
-        start_idx (int): The starting index for writing merges.
-        written_shas (Set[str]): A set of written merge commit SHAs.
+        repo: Repo
+            A GitPython Repo object.
+        branch_ref: Reference
+            A GitPython Reference object for the branch.
+        repo_identifier: str
+            The repository identifier (org/repo).
+        written_shas: Set[str]
+            A set of written commit SHAs to avoid duplicates.
 
     Returns:
-        int: The new index after writing merges.
+        List[str]
+            A list of CSV rows for the
     """
-    merges = []
+    rows:List[str] = []
     try:
         commits = list(repo.iter_commits(branch_ref.path))
     except GitCommandError:
-        # If commits can't be iterated (edge cases?), skip
-        return start_idx
-    # Collect merges
+        return rows
     for commit in commits:
         if len(commit.parents) == 2:
-            merges.append(commit)
-    # Output merges
-    idx = start_idx
-    for merge_commit in merges:
-        if merge_commit.hexsha in written_shas:
-            continue
-        written_shas.add(merge_commit.hexsha)
-        p1, p2 = merge_commit.parents
-        base = get_merge_base(repo, p1, p2)
-        if base is None:
-            notes = "two initial commits"
-        elif base.hexsha in (p1.hexsha, p2.hexsha):
-            notes = "a parent is the base"
-        else:
-            notes = ""
-        writer.write(
-            f"{idx},{branch_ref.path},{merge_commit.hexsha},{p1.hexsha},{p2.hexsha},{notes}\n"
-        )
-        idx += 1
-    return idx
+            if commit.hexsha in written_shas:
+                continue
+            written_shas.add(commit.hexsha)
+            p1, p2 = commit.parents
+            base = get_merge_base(repo, p1, p2)
+            if base is None:
+                notes = "two initial commits"
+            elif base.hexsha in (p1.hexsha, p2.hexsha):
+                notes = "a parent is the base"
+            else:
+                notes = ""
+            row = (
+                f"{repo_identifier},{branch_ref.path},{commit.hexsha},"
+                f"{p1.hexsha},{p2.hexsha},{notes}"
+            )
+            rows.append(row)
+    return rows
 
 
-def write_all_branches(repo: Repo, output_file: Path) -> None:
+def collect_all_branches(repo: Repo, repo_identifier: str) -> List[str]:
     """
-    Discover all local + remote branches, deduplicate them by their head commit,
-    find merges in each, and write to output_file in CSV format.
+    Discover all local and remote branches, deduplicate them by their head commit,
+    find merge commits in each, and return a list of CSV rows.
 
     Arguments:
-        repo (Repo): The Git repository object.
-        output_file (Path): The output file to write the CSV
+        repo: Repo
+            A GitPython Repo object.
+        repo_identifier: str
+            The repository identifier (org/repo).
+
+    Returns:
+        List[str]
+            A list of CSV rows (without an index) for the repository.
+            Columns: repository, branch_name, merge_commit, parent_1, parent_2,
+            notes
     """
-    with output_file.open("w", encoding="utf-8") as w:
-        w.write("idx,branch_name,merge_commit,parent_1,parent_2,notes\n")
-        # Filter references we care about
-        references = [
-            r
-            for r in repo.references
-            if r.path.startswith(("refs/heads/", "refs/remotes/"))
-        ]
-        # Deduplicate references by their HEAD commit
-        seen_heads, filtered_refs = set(), []
-        for ref in references:
-            head_sha = ref.commit.hexsha
-            if head_sha not in seen_heads:
-                seen_heads.add(head_sha)
-                filtered_refs.append(ref)
-        # Write merges
-        written_shas: Set[str] = set()
-        idx = 1
-        for ref in filtered_refs:
-            idx = write_branch_merges(repo, ref, w, idx, written_shas)
+    rows: List[str] = []
+    references = [r for r in repo.references if r.path.startswith(("refs/heads/", "refs/remotes/"))]
+    seen_heads = set()
+    filtered_refs = []
+    for ref in references:
+        head_sha = ref.commit.hexsha
+        if head_sha not in seen_heads:
+            seen_heads.add(head_sha)
+            filtered_refs.append(ref)
+    written_shas: Set[str] = set()
+    for ref in filtered_refs:
+        rows.extend(collect_branch_merges(repo, ref, repo_identifier, written_shas))
+    return rows
 
 
-def process_repo(
-    org: str,
-    repo: str,
-    output_dir: Path,
-    delete_local: bool,
-) -> None:
+def get_repo(org: str, repo_name: str, log:bool=False) -> Repo:
     """
-    Clone or reuse a local copy of 'org/repo' in 'cache_path', fetch PR branches,
-    collect merges, and write them to <output_dir>/<org>/<repo>.csv.
-    If delete_local is True, remove local clone after processing.
+    Clone or reuse a local copy of 'org/repo_name' under repos_cache/org/repo_name.
+    Returns a GitPython Repo object.
 
     Arguments:
-        org (str): The GitHub organization.
-        repo (str): The GitHub repository.
-        output_dir (Path): The output directory for CSVs.
-        delete_local (bool): If True, remove local clone after processing.
+        org: str
+            The organization name.
+        repo_name: str
+            The repository name.
+        log: bool
+            If True, log cloning/reusing messages.
+
+    Raises:
+        GitCommandError: If the repository cannot be cloned.
+
+    Returns:
+        Repo
+            A GitPython Repo object for the
     """
-    repo_name = f"{org}/{repo}"
-    org_dir = output_dir / org
-    org_dir.mkdir(parents=True, exist_ok=True)
-    out_csv = org_dir / f"{repo}.csv"
-    if out_csv.exists():
-        logger.info(f"{repo_name:<30} SKIPPED -> already processed")
-        return
-
-    logger.info(f"{repo_name:<30} STARTED")
-
-    local_dir = Path(os.getenv("REPOS_PATH", "repos")) / org / repo
-
+    repos_cache = Path(os.getenv("REPOS_PATH", "repos"))
+    repo_dir = repos_cache / org / repo_name
     github_user, github_token = read_github_credentials()
 
-    # If directory doesn't exist, clone; if it exists, reuse.
-    if not local_dir.is_dir():
-        logger.info(f"{repo_name:<30} CLONING")
-        local_dir.mkdir(parents=True, exist_ok=True)
+    if not repo_dir.is_dir():
+        if log:
+            logger.info(f"Cloning {org}/{repo_name} into {repo_dir}...")
+        repo_dir.mkdir(parents=True, exist_ok=True)
         if github_user == "Bearer":
-            clone_url = f"https://{github_token}@github.com/{org}/{repo}.git"
+            clone_url = f"https://{github_token}@github.com/{org}/{repo_name}.git"
         else:
-            clone_url = (
-                f"https://{github_user}:{github_token}@github.com/{org}/{repo}.git"
-            )
+            clone_url = f"https://{github_user}:{github_token}@github.com/{org}/{repo_name}.git"
         try:
-            rrepo = Repo.clone_from(clone_url, local_dir, multi_options=["--no-tags"])
-        except GitCommandError:
-            logger.info(f"{repo_name:<30} CLONE FAILED -> empty CSV")
-            out_csv.write_text("idx,branch_name,merge_commit,parent_1,parent_2,notes\n")
-            return
+            return Repo.clone_from(clone_url, repo_dir, multi_options=["--no-tags"])
+        except GitCommandError as e:
+            logger.error(f"Failed to clone {org}/{repo_name}: {e}")
+            raise
     else:
-        logger.info(f"{repo_name:<30} REUSING LOCAL REPO")
-        try:
-            rrepo = Repo(local_dir)
-        except Exception:  # pylint: disable=broad-except
-            logger.info(f"{repo_name:<30} BROKEN LOCAL REPO -> empty CSV")
-            out_csv.write_text("idx,branch_name,merge_commit,parent_1,parent_2,notes\n")
-            return
+        if log:
+            logger.info(f"Reusing existing repo {org}/{repo_name} at {repo_dir}")
+        return Repo(repo_dir)
+
+def process_repo(org: str, repo: str, delete_local: bool) -> List[str]:
+    """
+    Clone or reuse a local copy of 'org/repo', fetch PR branches,
+    collect merge commit rows, and return them.
+    If delete_local is True, remove the local clone after processing.
+
+    Arguments:
+        org: str
+            The organization name.
+        repo: str
+            The repository name.
+        delete_local: bool
+            If True, remove the local clone after processing.
+
+    Returns:
+        List[str]
+            A list of CSV rows (without an index) for the repository.
+            Columns: repository, branch_name, merge_commit, parent_1, parent_2,
+            notes
+    """
+    repo_identifier = f"{org}/{repo}"
+    logger.info(f"{repo_identifier:<30} STARTED")
+    try:
+        rrepo = get_repo(org, repo)
+    except GitCommandError:
+        return []
 
     fetch_pr_branches(rrepo)
-    write_all_branches(rrepo, out_csv)
-    logger.info(f"{repo_name:<30} DONE")
-
-    # Optionally remove
+    rows = collect_all_branches(rrepo, repo_identifier)
+    logger.info(f"{repo_identifier:<30} DONE")
     if delete_local:
-        shutil.rmtree(local_dir, ignore_errors=True)
+        shutil.rmtree(rrepo.working_dir, ignore_errors=True)
+    return rows
 
-
-def main() -> None:
+def main() -> None: # pylint: disable=too-many-locals
     """
-    Main entry point. Parses arguments, reads repos from CSV via pandas,
-    and processes them in parallel. Uses environment variable REPOS_PATH if set,
-    otherwise defaults to /tmp for caching.
+    Main entry point.
+    Parses arguments, reads repos from CSV, processes them in parallel, and writes
+    all merge commit data to a single CSV file.
     """
     parser = argparse.ArgumentParser(
         description="Find 2-parent merge commits in GitHub repos."
     )
     parser.add_argument(
-        "csv_file",
+        "--repos",
         help="Path to input CSV with a 'repository' column (org/repo).",
+        required=True,
     )
     parser.add_argument(
-        "output_dir",
-        help="Directory for output CSVs (one per repository).",
+        "--output_file",
+        help="Path to the output CSV file (one consolidated file).",
+        required=True,
     )
     parser.add_argument(
         "--delete",
@@ -310,43 +310,39 @@ def main() -> None:
         "--threads",
         type=int,
         default=-1,
-        help="Number of parallel threads to use (default: 8).",
+        help="Number of parallel threads to use (default: number of CPUs).",
     )
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Read the CSV via pandas
-    df = pd.read_csv(args.csv_file)
+    df = pd.read_csv(args.repos)
     if "repository" not in df.columns:
         sys.exit("CSV missing 'repository' column.")
 
     repos = df["repository"].tolist()
     logger.info(f"Found {len(repos)} repositories to process.")
 
-    # Parallel processing of repositories
     num_workers = os.cpu_count() if args.threads == -1 else args.threads
+    all_rows: List[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = []
+        future_to_repo = {}
         for repo_str in repos:
             parts = repo_str.split("/", maxsplit=1)
             if len(parts) != 2:
                 logger.error(f"Invalid repository format: {repo_str}")
                 continue
             org, repo = parts
-            futures.append(
-                executor.submit(
-                    process_repo,
-                    org,
-                    repo,
-                    output_dir,
-                    args.delete,
-                )
-            )
-        # Wait for all tasks to complete
-        for future in concurrent.futures.as_completed(futures):
-            _ = future.result()
+            future = executor.submit(process_repo, org, repo, args.delete)
+            future_to_repo[future] = repo_str
+        for future in concurrent.futures.as_completed(future_to_repo):
+            all_rows.extend(future.result())
+
+    # Write one big CSV file with a header.
+    output_file = Path(args.output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as out_f:
+        out_f.write("idx,repository,branch_name,merge_commit,parent_1,parent_2,notes\n")
+        for idx, row in enumerate(all_rows, start=1):
+            out_f.write(f"{idx},{row}\n")
 
     logger.info("All repositories processed.")
 
