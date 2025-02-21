@@ -1,0 +1,77 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    -   id: check-added-large-files
+        args: ['--maxkb=20000']
+    -   id: check-ast
+    -   id: check-byte-order-marker
+    -   id: check-builtin-literals
+    -   id: check-docstring-first
+    -   id: check-executables-have-shebangs
+    -   id: check-shebang-scripts-are-executable
+    -   id: check-merge-conflict
+    -   id: check-symlinks
+    -   id: check-toml
+    -   id: check-vcs-permalinks
+    -   id: check-xml
+    -   id: check-yaml
+    -   id: debug-statements
+    -   id: destroyed-symlinks
+    -   id: detect-private-key
+    -   id: end-of-file-fixer
+    -   id: file-contents-sorter
+    -   id: fix-byte-order-marker
+    -   id: fix-encoding-pragma
+    -   id: forbid-new-submodules
+    -   id: mixed-line-ending
+    -   id: name-tests-test
+    -   id: no-commit-to-branch
+    -   id: requirements-txt-fixer
+    -   id: sort-simple-yaml
+    -   id: trailing-whitespace
+
+-   repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+    -   id: python-check-blanket-noqa
+    -   id: python-check-mock-methods
+    -   id: python-no-eval
+    -   id: python-no-log-warn
+    -   id: python-use-type-annotations
+    -   id: rst-backticks
+    -   id: rst-directive-colons
+    -   id: rst-inline-touching-normal
+    -   id: text-unicode-replacement-char
+
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.7
+    hooks:
+    -   id: ruff
+        args: [ --fix ]
+
+-   repo: https://github.com/PyCQA/isort
+    rev: 6.0.0
+    hooks:
+    -   id: isort
+        language_version: python3.13
+
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+    -   id: mypy
+        language_version: python3.13
+
+-   repo: https://github.com/terrencepreilly/darglint
+    rev: v1.8.1
+    hooks:
+    -   id: darglint
+        language_version: python3.13
+
+- repo: local
+  hooks:
+  - id: pylint-custom
+    name: pylint
+    entry: pylint
+    language: system
+    types: [python]
