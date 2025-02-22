@@ -48,8 +48,7 @@ def split_single_conflict_snippet(
             break
 
     if start_idx == -1:
-        # No conflict marker
-        return ([], [], [])
+        raise ValueError("Could not find start marker.")
 
     # Locate >>>>>>>
     for j in range(start_idx, len(lines)):
@@ -58,8 +57,7 @@ def split_single_conflict_snippet(
             break
 
     if end_idx == -1:
-        # No matching end marker
-        return ([], [], [])
+        raise ValueError("Found start marker but no end marker.")
 
     before_context = lines[:start_idx]
     conflict_block = lines[start_idx : end_idx + 1]  # inclusive of end_idx

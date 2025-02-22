@@ -1,2 +1,3 @@
 [MESSAGES CONTROL]
-disable=broad-except,duplicate-code
+enable=all
+disable=broad-except,duplicate-code,locally-disabled,suppressed-message

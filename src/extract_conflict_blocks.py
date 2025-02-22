@@ -14,13 +14,14 @@ This script:
   2. Identifies the corresponding "*.final_merged" file for each.
   3. Splits the conflict-markers file into conflict blocks.
   4. For each block:
-       - gathers N lines of context before <<<<<<< and after >>>>>>>,
+       - gathers up to 20 lines of context before <<<<<<< and after >>>>>>>,
+         stopping if it hits another conflict marker.
        - locates that context in the merged file,
        - extracts everything in between as the “resolved conflict.”
   5. Writes each conflict block to two files:
        - <basename><n>.conflict        (the conflict block + context from the .conflict file)
        - <basename><n>.resolved_conflict (the code found in the merged
-        file between the matched contexts)
+         file between the matched contexts)
        where <basename> is the base of the input file (e.g. "1a") and n is the conflict number.
 """
 
@@ -29,7 +30,10 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+from loguru import logger
 from rich.progress import Progress
+
+MAX_CONTEXT_RESOLUTION_EXTRACTION = 20
 
 
 def split_conflict_blocks(lines: List[str]) -> List[Tuple[int, int]]:
@@ -59,6 +63,9 @@ def split_conflict_blocks(lines: List[str]) -> List[Tuple[int, int]]:
                     end_idx = j
                 j += 1
             if sep_idx == -1 or end_idx == -1:
+                logger.error(
+                    "Incomplete conflict block found. Stopping further processing."
+                )
                 break
             blocks.append((start_idx, end_idx))
             i = end_idx + 1
@@ -84,15 +91,42 @@ def match_subsequence(lines: List[str], subseq: List[str], start_idx: int = 0) -
 
 
 def get_before_after_context(
-    lines: List[str], start_idx: int, end_idx: int, context: int
+    lines: List[str],
+    start_idx: int,
+    end_idx: int,
 ) -> Tuple[List[str], List[str]]:
     """
-    Returns two lists of lines:
-      before_context: the N lines immediately above start_idx
-      after_context: the N lines immediately below end_idx
+    Returns two lists of lines: (before_context, after_context), each containing
+    *up to* 20 lines of context before/after the conflict block.
+    We stop collecting context lines if we encounter another conflict marker.
     """
-    before_context = lines[max(0, start_idx - context) : start_idx]
-    after_context = lines[end_idx + 1 : min(len(lines), end_idx + 1 + context)]
+    # Collect "before" context, up to 20 lines or until another conflict marker.
+    before_context: List[str] = []
+    cur = start_idx - 1
+    while cur >= 0 and len(before_context) < MAX_CONTEXT_RESOLUTION_EXTRACTION:
+        if (
+            lines[cur].startswith("<<<<<<<")
+            or lines[cur].startswith("=======")
+            or lines[cur].startswith(">>>>>>>")
+        ):
+            break
+        before_context.append(lines[cur])
+        cur -= 1
+    before_context.reverse()
+
+    # Collect "after" context, up to 20 lines or until another conflict marker.
+    after_context: List[str] = []
+    cur = end_idx + 1
+    while cur < len(lines) and len(after_context) < MAX_CONTEXT_RESOLUTION_EXTRACTION:
+        if (
+            lines[cur].startswith("<<<<<<<")
+            or lines[cur].startswith("=======")
+            or lines[cur].startswith(">>>>>>>")
+        ):
+            break
+        after_context.append(lines[cur])
+        cur += 1
+
     return before_context, after_context
 
 
@@ -120,14 +154,16 @@ def extract_resolved_code(
     """
     i1 = match_subsequence(merged_lines, before_context, 0)
     if i1 < 0:
+        logger.error("Before context not found in merged file.")
         return []
-    while i1 >= 0:
-        start_after = i1 + len(before_context)
-        i2 = match_subsequence(merged_lines, after_context, start_after)
-        if i2 >= 0:
-            return merged_lines[start_after:i2]
-        i1 = match_subsequence(merged_lines, before_context, i1 + 1)
-    return []
+    i2 = match_subsequence(merged_lines, after_context, 0)
+    if i2 < 0 or i1 >= i2:
+        logger.warning(
+            "Resolved code not found in merged file due to context ordering."
+        )
+        raise ValueError("Resolved code not found in merged file.")
+    start_after = i1 + len(before_context)
+    return merged_lines[start_after:i2]
 
 
 def process_conflict_file(  # pylint: disable=too-many-locals
@@ -138,34 +174,46 @@ def process_conflict_file(  # pylint: disable=too-many-locals
       - Reads the conflict-markers file and its corresponding final_merged file.
       - Splits the conflict file into conflict blocks.
       - For each block:
-           * Gathers context (N lines before and after).
-           * In the merged file, locates that context and extracts the resolved code.
-           * Writes the conflict snippet and the resolved snippet to:
-             <basename><n>.conflict and <basename><n>.resolved_conflict
-           where <basename> is the stem of conflict_file (e.g. "1a") and n is the block number.
+           * Gathers a normal snippet (+/- context lines) for writing .conflict.
+           * Uses up to 20 lines of marker-free context to match inside the final_merged.
+           * Extracts the resolved code from final_merged.
+           * Writes conflict snippet and resolved snippet.
     """
     basename = conflict_file.stem  # e.g. "1a" from "1a.conflict"
+    logger.info(f"Processing file: {conflict_file}")
     conflict_lines = conflict_file.read_text(encoding="utf-8").splitlines(keepends=True)
     merged_lines = final_file.read_text(encoding="utf-8").splitlines(keepends=True)
     blocks = split_conflict_blocks(conflict_lines)
-    if not blocks:
-        return
+    logger.info(f"Found {len(blocks)} conflict block(s) in {conflict_file}")
+
     for n, (start_idx, end_idx) in enumerate(blocks, start=1):
         conflict_snippet = gather_conflict_plus_context(
             conflict_lines, start_idx, end_idx, context
         )
         before_ctx, after_ctx = get_before_after_context(
-            conflict_lines, start_idx, end_idx, context
+            conflict_lines, start_idx, end_idx
         )
-        resolved_lines = extract_resolved_code(merged_lines, before_ctx, after_ctx)
-        # Assemble the resolved snippet: context before + resolved block + context after
+        try:
+            resolved_lines = extract_resolved_code(merged_lines, before_ctx, after_ctx)
+        except ValueError:
+            logger.warning(
+                f"Skipping conflict block {basename}{n} due to missing resolved code."
+            )
+            continue
         resolved_snippet = (
             "".join(before_ctx) + "".join(resolved_lines) + "".join(after_ctx)
         )
+
+        if "".join(resolved_lines) not in "".join(merged_lines):
+            logger.error("Resolved snippet consistency check failed.")
+            raise ValueError("Resolved snippet not found in merged file.")
+
         conflict_output = output_dir / f"{basename}{n}.conflict"
         resolved_output = output_dir / f"{basename}{n}.resolved_conflict"
+
         conflict_output.write_text(conflict_snippet, encoding="utf-8")
         resolved_output.write_text(resolved_snippet, encoding="utf-8")
+        logger.info(f"Successfully processed conflict block {basename}{n}")
 
 
 def main():
@@ -175,12 +223,12 @@ def main():
     )
     parser.add_argument(
         "--conflict_dir",
-        required=True,
+        default="merges/repos_small/file_conflicts",
         help="Base directory containing .conflict and .final_merged files",
     )
     parser.add_argument(
         "--output_dir",
-        required=True,
+        default="merges/repos_small/conflict_blocks",
         help="Output directory for <basename><n>.conflict and "
         "<basename><n>.resolved_conflict files",
     )
@@ -188,7 +236,7 @@ def main():
         "--context",
         type=int,
         default=3,
-        help="Number of context lines to include before/after the conflict block",
+        help="Number of context lines to include in the conflict snippet",
     )
     args = parser.parse_args()
 
@@ -197,6 +245,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     conflict_files = sorted(conflict_dir.rglob("*.conflict"))
+    logger.info(f"Found {len(conflict_files)} conflict file(s) in {conflict_dir}")
 
     with Progress() as progress:
         task = progress.add_task(
@@ -205,12 +254,14 @@ def main():
         for cfile in conflict_files:
             final_file = cfile.with_suffix(".final_merged")
             if not final_file.exists():
+                logger.warning(f"No matching .final_merged for {cfile}")
                 sys.stderr.write(f"No matching .final_merged for {cfile}\n")
                 progress.advance(task)
                 continue
             process_conflict_file(cfile, final_file, args.context, output_dir)
             progress.advance(task)
 
+    logger.info(f"Done processing conflict files. Output is in {output_dir}")
     print(f"Done processing conflict files. Output is in {output_dir}")
 
 

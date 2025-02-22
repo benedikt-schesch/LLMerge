@@ -125,7 +125,7 @@ def get_merge_base(repo: Repo, c1: Commit, c2: Commit) -> Optional[Commit]:
             common_prefix += 1
         else:
             break
-    return None if common_prefix == 0 else h1[common_prefix - 1]
+    return None if not common_prefix else h1[common_prefix - 1]
 
 
 def collect_branch_merges(
@@ -259,7 +259,7 @@ def get_repo(org: str, repo_name: str, log: bool = False) -> Repo:
     else:
         if log:
             logger.info(f"Reusing existing repo {org}/{repo_name} at {repo_dir}")
-        return Repo(repo_dir)
+        return Repo(str(repo_dir))
 
 
 def process_repo(org: str, repo: str, delete_local: bool) -> List[str]:
@@ -309,12 +309,12 @@ def main() -> None:  # pylint: disable=too-many-locals
     parser.add_argument(
         "--repos",
         help="Path to input CSV with a 'repository' column (org/repo).",
-        required=True,
+        default="input_data/repos_small.csv",
     )
     parser.add_argument(
         "--output_file",
         help="Path to the output CSV file (one consolidated file).",
-        required=True,
+        default="merges/repos_small/merges.csv",
     )
     parser.add_argument(
         "--delete",
@@ -338,27 +338,38 @@ def main() -> None:  # pylint: disable=too-many-locals
     logger.info(f"Found {len(repos)} repositories to process.")
 
     num_workers = os.cpu_count() if args.n_threads is None else args.n_threads
-    logger.info(f"Using {num_workers} parallel threads.")
+
     all_rows: List[str] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        future_to_repo = {}
+    if num_workers == 1:
+        logger.info("Using 1 thread.")
         for repo_str in repos:
             parts = repo_str.split("/", maxsplit=1)
             if len(parts) != 2:
                 logger.error(f"Invalid repository format: {repo_str}")
                 continue
             org, repo = parts
-            future = executor.submit(process_repo, org, repo, args.delete)
-            future_to_repo[future] = repo_str
+            all_rows.extend(process_repo(org, repo, args.delete))
+    else:
+        logger.info(f"Using {num_workers} parallel threads.")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_repo = {}
+            for repo_str in repos:
+                parts = repo_str.split("/", maxsplit=1)
+                if len(parts) != 2:
+                    logger.error(f"Invalid repository format: {repo_str}")
+                    continue
+                org, repo = parts
+                future = executor.submit(process_repo, org, repo, args.delete)
+                future_to_repo[future] = repo_str
 
-        # Add a rich progress bar to track repository processing.
-        with Progress() as progress:
-            task = progress.add_task(
-                "Processing repositories...", total=len(future_to_repo)
-            )
-            for future in concurrent.futures.as_completed(future_to_repo):
-                all_rows.extend(future.result())
-                progress.advance(task)
+            # Add a rich progress bar to track repository processing.
+            with Progress() as progress:
+                task = progress.add_task(
+                    "Processing repositories...", total=len(future_to_repo)
+                )
+                for future in concurrent.futures.as_completed(future_to_repo):
+                    all_rows.extend(future.result())
+                    progress.advance(task)
 
     # Write one big CSV file with a header.
     output_file = Path(args.output_file)

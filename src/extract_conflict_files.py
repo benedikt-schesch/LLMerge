@@ -161,6 +161,9 @@ def process_single_merge(
         repo = get_repo(org, repo_name, log=False)
     except Exception as e:
         logger.error(f"Skipping {org}/{repo_name} due to clone error: {e}")
+        # Print full exception for debugging
+        logger.exception(e)
+        return
 
     temp_dir = create_temp_workdir(org, repo_name, merge_sha)
     shutil.copytree(repo.working_dir, temp_dir, symlinks=True)
@@ -247,7 +250,7 @@ def main():
                     logger.error(f"Worker thread raised an exception: {exc}")
                 progress.advance(progress_task)
 
-    logger.info("Done extracting conflicts.")
+    logger.info("Done extracting conflict files.")
 
 
 if __name__ == "__main__":
