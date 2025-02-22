@@ -30,7 +30,7 @@ from git import GitCommandError, Repo
 from loguru import logger
 from rich.progress import Progress
 
-from find_merges import get_repo
+from find_merges import get_repo_path
 
 logger.add("run.log", rotation="10 MB")
 
@@ -157,16 +157,12 @@ def process_single_merge(
     3) Reproduce the merge.
     Returns the list of conflict IDs (e.g. ["1a", "1b", ...]) for this merge.
     """
-    try:
-        repo = get_repo(org, repo_name, log=False)
-    except Exception as e:
-        logger.error(f"Skipping {org}/{repo_name} due to clone error: {e}")
-        # Print full exception for debugging
-        logger.exception(e)
-        return
+    repo_path = get_repo_path(org, repo_name)
+    if not repo_path.exists():
+        raise FileNotFoundError(f"Repository not found: {repo_path}")
 
     temp_dir = create_temp_workdir(org, repo_name, merge_sha)
-    shutil.copytree(repo.working_dir, temp_dir, symlinks=True)
+    shutil.copytree(repo_path, temp_dir, symlinks=True)
     repo_copy = Repo(temp_dir)
 
     try:
@@ -235,20 +231,25 @@ def main():
         )
 
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-        tasks = [(m[1], output_dir) for m in df.iterrows()]
-        futures = [executor.submit(worker, task) for task in tasks]
-        with Progress() as progress:
-            progress_task = progress.add_task(
-                "Extracting conflicts...", total=len(futures)
-            )
-            for f in concurrent.futures.as_completed(futures):
-                try:
-                    result = f.result()
-                    results.append(result)
-                except Exception as exc:
-                    logger.error(f"Worker thread raised an exception: {exc}")
-                progress.advance(progress_task)
+
+    if num_workers is not None and num_workers < 2:
+        for task in [(m[1], output_dir) for m in df.iterrows()]:
+            worker(task)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            tasks = [(m[1], output_dir) for m in df.iterrows()]
+            futures = [executor.submit(worker, task) for task in tasks]
+            with Progress() as progress:
+                progress_task = progress.add_task(
+                    "Extracting conflicts...", total=len(futures)
+                )
+                for f in concurrent.futures.as_completed(futures):
+                    try:
+                        result = f.result()
+                        results.append(result)
+                    except Exception as exc:
+                        logger.error(f"Worker thread raised an exception: {exc}")
+                    progress.advance(progress_task)
 
     logger.info("Done extracting conflict files.")
 

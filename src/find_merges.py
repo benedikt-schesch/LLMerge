@@ -212,6 +212,24 @@ def collect_all_branches(repo: Repo, repo_identifier: str) -> List[str]:
     return rows
 
 
+def get_repo_path(org: str, repo_name: str) -> Path:
+    """
+    Return the local path where the repository should be cloned.
+
+    Arguments:
+        org: str
+            The organization name.
+        repo_name: str
+            The repository name.
+
+    Returns:
+        Path
+            The local path where the repository should be cloned.
+    """
+    repos_cache = Path(os.getenv("REPOS_PATH", "repos"))
+    return repos_cache / org / repo_name
+
+
 def get_repo(org: str, repo_name: str, log: bool = False) -> Repo:
     """
     Clone or reuse a local copy of 'org/repo_name' under repos_cache/org/repo_name.
@@ -232,8 +250,7 @@ def get_repo(org: str, repo_name: str, log: bool = False) -> Repo:
         Repo
             A GitPython Repo object for the
     """
-    repos_cache = Path(os.getenv("REPOS_PATH", "repos"))
-    repo_dir = repos_cache / org / repo_name
+    repo_dir = get_repo_path(org, repo_name)
     github_user, github_token = read_github_credentials()
 
     if not repo_dir.is_dir():
