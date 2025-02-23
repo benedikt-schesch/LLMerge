@@ -7,7 +7,6 @@ repos/
 .workdir/
 **/file_conflicts
 **/conflict_blocks
-code.ipynb
 
 # Compiled class file
 *.class
