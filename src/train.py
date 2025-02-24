@@ -7,10 +7,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-
-# Import PyTorch and Hugging Face Transformers
 import torch
-import wandb
 from datasets import load_from_disk
 from transformers import (
     AutoModelForCausalLM,
@@ -18,12 +15,9 @@ from transformers import (
     ProgressCallback,
     TrainingArguments,
 )
-
-# Import libraries from TRL (Transformers Reinforcement Learning)
 from trl import GRPOConfig, GRPOTrainer
-
-# Import dataset utilities
 from build_dataset import validate_dataset
+import wandb
 
 # Parameters
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -31,10 +25,10 @@ OUTPUT_DIR = "data/Qwen-GRPO-training"
 DATASET_PATH = "merges/repos_50/dataset"  # Path produced by build_dataset.py
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 # Device
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-wandb.init(project="LLMerge", entity="b-schesch")
+wandb.init(project="LLMerge", entity="b-schesch")  # type: ignore
 
 
 def get_model(device):
