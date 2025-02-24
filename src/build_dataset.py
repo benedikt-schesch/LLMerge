@@ -5,6 +5,7 @@ This script prepares a dataset for training a model on conflict resolution.
 It loads conflict blocks from a directory, splits them into train/test sets,
 and formats them as conversation examples.
 """
+
 import argparse
 import os
 from pathlib import Path
@@ -160,7 +161,7 @@ def main():
     parser.add_argument(
         "--test_size",
         type=float,
-        default=0.1,
+        default=0.2,
         help="Proportion of dataset to use as test set.",
     )
     parser.add_argument(

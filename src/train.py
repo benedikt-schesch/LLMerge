@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=unused-argument,redefined-outer-name,unused-variable
 """Script to train a Qwen model using GRPO"""
-import logging
+
 import math
 import os
 import re
@@ -9,9 +10,15 @@ from typing import Dict, List, Optional
 
 # Import PyTorch and Hugging Face Transformers
 import torch
+import wandb
 from datasets import load_from_disk
-from transformers import (AutoModelForCausalLM, AutoTokenizer, TrainerCallback,
-                          TrainerControl, TrainerState, TrainingArguments)
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    ProgressCallback,
+    TrainingArguments,
+)
+
 # Import libraries from TRL (Transformers Reinforcement Learning)
 from trl import GRPOConfig, GRPOTrainer
 
@@ -22,16 +29,16 @@ from build_dataset import validate_dataset
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 OUTPUT_DIR = "data/Qwen-GRPO-training"
 DATASET_PATH = "merges/repos_50/dataset"  # Path produced by build_dataset.py
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 # Device
 device = torch.device("cpu")
 print(f"Using device: {device}")
 
+wandb.init(project="LLMerge", entity="b-schesch")
+
 
 def get_model(device):
     """Get the model and tokenizer for training."""
-    # Create output directory if it doesn't exist
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
     # Initialize tokenizer with chat template
     tokenizer = AutoTokenizer.from_pretrained(
         MODEL_NAME, trust_remote_code=True, padding_side="right"
@@ -88,9 +95,8 @@ def test_model_inference(user_input: str | List[Dict[str, str]]):
 model, tokenizer = get_model(device)
 
 # Test the model
-test_input = "how are you?"
-response = test_model_inference(test_input)
-print(f"Test Input: {test_input}")
+response = test_model_inference("how are you?")
+print("Test Input: how are you?")
 print(f"Model Response: {response}")
 
 dataset = load_from_disk(DATASET_PATH)
@@ -99,7 +105,8 @@ dataset = load_from_disk(DATASET_PATH)
 validate_dataset(dataset)
 
 print(
-    f"Loaded dataset: {len(dataset['train'])} training samples and {len(dataset['test'])} test samples."
+    f"Loaded dataset: {len(dataset['train'])} training "
+    "samples and {len(dataset['test'])} test samples."
 )
 
 # Give an example prompt and test the model
@@ -109,7 +116,6 @@ print(f"Example prompt: {prompt}")
 response = test_model_inference(prompt)
 print(f"Model response: {response}")
 
-print("==== START TRAINING ====")
 # Reward Functions
 
 
@@ -122,8 +128,8 @@ def accuracy_reward(completions, **kwargs):
     """
 
     # Extract responses
-    contents = [completion[0]["content"] for completion in completions]
-    rewards = []
+    # contents = [completion[0]["content"] for completion in completions]
+    # rewards = []
 
     solutions = kwargs.get("solution")  # Get solutions from kwargs
 
@@ -133,12 +139,33 @@ def accuracy_reward(completions, **kwargs):
     return [0.5] * len(completions)  # Return neutral reward
 
 
-# In this function, we check whether the model response is **equivalent** to the correct answer. Instead of comparing raw text, we:
+# Code output reward
+def format_markdown_reward(completions, **kwargs):
+    """
+    Reward function to check if the completion contains the correct format:
+    ```java
+    <code>
+    ```
+    """
+    # Define the improved regex pattern
+    pattern = r"^```java\n([\s\S]*?)```$"
+
+    # Extract the content from each completion
+    completion_contents = [completion[0]["content"] for completion in completions]
+
+    # Check if each completion matches the pattern
+    matches = [
+        re.match(pattern, content, re.DOTALL | re.MULTILINE)
+        for content in completion_contents
+    ]
+
+    # Reward 1.0 for correct format, 0.0 otherwise
+    return [1.0 if match else 0.0 for match in matches]
 
 
 # Format Reward
 # Implement Format Reward Function
-def format_reward(completions, **kwargs):
+def format_thinking_reward(completions, **kwargs):
     """
     Reward function to check if the completion has the correct format:
     <think>...</think> <answer>...</answer>.
@@ -157,36 +184,6 @@ def format_reward(completions, **kwargs):
 
     # Reward 1.0 for correct format, 0.0 otherwise
     return [1.0 if match else 0.0 for match in matches]
-
-
-# In this function:
-
-
-# Reasoning Steps Reward
-def reasoning_steps_reward(completions, **kwargs):
-    r"""
-    Reward function to encourage clear step-by-step reasoning.
-    It looks for patterns like "Step 1:", numbered lists, bullet points,
-    and transition words.
-    """
-    # Regex pattern to find indicators of reasoning steps
-    pattern = r"(Step \d+:|^\d+\.|\n-|\n\*|First,|Second,|Next,|Finally,)"
-
-    # Extract completion contents
-    completion_contents = [completion[0]["content"] for completion in completions]
-
-    # Count the number of reasoning step indicators in each completion
-    matches = [
-        len(re.findall(pattern, content, re.MULTILINE))
-        for content in completion_contents
-    ]
-
-    # Reward is proportional to the number of reasoning steps, maxing out at 1.0
-    # We're using a "magic number" 3 here - encourage at least 3 steps for full reward
-    return [min(1.0, count / 3) for count in matches]
-
-
-# Cosine Scaled Reward
 
 
 # Implement Cosine Scaled Reward Function
@@ -232,9 +229,6 @@ def get_cosine_scaled_reward(
     return cosine_scaled_reward
 
 
-# `get_cosine_scaled_reward(...)` generates a reward function for training, customizing scaling with parameters like min_value_wrong/max_value_wrong (penalty range for incorrect answers) and min_value_correct/max_value_correct (reward range for correct ones). max_len sets the maximum length for scaling.
-
-
 # Repetition Penalty Reward
 def get_repetition_penalty_reward(ngram_size: int = 3, max_penalty: float = -0.1):
     """
@@ -249,14 +243,14 @@ def get_repetition_penalty_reward(ngram_size: int = 3, max_penalty: float = -0.1
         words = text.lower().split()  # Lowercase and split into words
         return zip(*[words[i:] for i in range(ngram_size)])  # Create n-grams
 
-    def repetition_penalty_reward(completions, **kwargs) -> float:
+    def repetition_penalty_reward(completions, **kwargs) -> List[float]:
         """
         Repetition penalty reward function.
         """
         contents = [completion[0]["content"] for completion in completions]
-        rewards = []
+        rewards: List[float] = []
         for completion in contents:
-            if completion == "":  # No penalty for empty completions
+            if not completion:  # No penalty for empty completions
                 rewards.append(0.0)
                 continue
             if len(completion.split()) < ngram_size:  # No penalty for short completions
@@ -278,12 +272,9 @@ def get_repetition_penalty_reward(ngram_size: int = 3, max_penalty: float = -0.1
     return repetition_penalty_reward
 
 
-# Our `get_repetition_penalty_reward(...)` creates a reward function to penalize repetition, with parameters like ngram_size (default 3, for trigrams) and max_penalty (a negative value, e.g., -0.1).
-
-
 # Training Configurations for R1 Zero
 @dataclass
-class GRPOScriptArguments:
+class GRPOScriptArguments:  # pylint: disable=too-many-instance-attributes
     """
     Script arguments for GRPO training, specifically related to reward functions.
     """
@@ -291,7 +282,8 @@ class GRPOScriptArguments:
     reward_funcs: list[str] = field(
         default_factory=lambda: ["accuracy", "format"],
         metadata={
-            "help": "List of reward functions. Possible values: 'accuracy', 'format', 'reasoning_steps', 'cosine', 'repetition_penalty'"
+            "help": "List of reward functions. Possible values: 'accuracy', 'format', "
+            + "'reasoning_steps', 'cosine', 'repetition_penalty'"
         },
     )
     cosine_min_value_wrong: float = field(
@@ -327,8 +319,6 @@ class GRPOScriptArguments:
     )
 
 
-# Our `@dataclass` decorator makes it easy to create a class for storing data. WhileGRPOScriptArguments class holds reward settings.
-
 # Define TrainingArguments from transformers
 training_args = TrainingArguments(
     output_dir=OUTPUT_DIR,  # Output directory for checkpoints and logs
@@ -351,14 +341,15 @@ training_args = TrainingArguments(
     bf16=True,  # Use mixed precision BFP16 training
     push_to_hub=False,  # Whether to push the final model to Hugging Face Hub
     gradient_checkpointing=True,  # Enable gradient checkpointing
-    report_to="none",  # Reporting to no one
-    no_cuda=(
-        True if device == torch.device("cpu") else False
-    ),  # Disable CUDA if using CPU
+    report_to="wandb",  # Reporting to no one
+    no_cuda=device == torch.device("cpu"),  # Disable CUDA if using CPU
 )
 
 
-# Finally, we need to have a ModelConfig. This is where we put settings that are specific to the **model itself**, like which pre-trained model to use, what data type to use (like bfloat16), and whether to trust remote code or not and so.
+# Finally, we need to have a ModelConfig.
+# This is where we put settings that are specific to the **model itself**,
+# like which pre-trained model to use, what data type to use (like bfloat16),
+# and whether to trust remote code or not and so.
 @dataclass
 class ModelConfig:
     """
@@ -374,7 +365,8 @@ class ModelConfig:
     model_revision: Optional[str] = field(
         default="main",
         metadata={
-            "help": "The specific model version to use (can be a branch name, tag name or commit id)."
+            "help": "The specific model version to use "
+            + "(can be a branch name, tag name or commit id)."
         },
     )
     torch_dtype: Optional[str] = field(
@@ -395,7 +387,11 @@ class ModelConfig:
     )
 
 
-# Our **ModelConfig** class holds key settings, including model_name_or_path, which defaults to **Qwen 0.5B Instruct**. We use torch_dtype="bfloat16" for efficiency and set trust_remote_code=True for safe remote loading. Additionally, attn_implementation="flash_attention_2" is enabled for potentially faster training if supported.
+# Our **ModelConfig** class holds key settings, including model_name_or_path,
+# which defaults to **Qwen 0.5B Instruct**. We use torch_dtype="bfloat16" for
+# efficiency and set trust_remote_code=True for safe remote loading.
+# Additionally, attn_implementation="flash_attention_2" is enabled
+# for potentially faster training if supported.
 
 
 # Instantiate configuration objects
@@ -410,17 +406,17 @@ def get_reward_functions(script_args):
     """
     reward_funcs_list = []
     reward_funcs_registry = {
-        "accuracy": accuracy_reward,  # Assuming accuracy_reward is defined in previous steps
-        "format": format_reward,  # Assuming format_reward is defined in previous steps
-        "reasoning_steps": reasoning_steps_reward,  # Assuming reasoning_steps_reward is defined
-        "cosine": get_cosine_scaled_reward(  # Assuming get_cosine_scaled_reward is defined
+        "accuracy": accuracy_reward,
+        "format": format_thinking_reward,
+        "markdown": format_markdown_reward,
+        "cosine": get_cosine_scaled_reward(
             min_value_wrong=script_args.cosine_min_value_wrong,
             max_value_wrong=script_args.cosine_max_value_wrong,
             min_value_correct=script_args.cosine_min_value_correct,
             max_value_correct=script_args.cosine_max_value_correct,
             max_len=script_args.cosine_max_len,
         ),
-        "repetition_penalty": get_repetition_penalty_reward(  # Assuming get_repetition_penalty_reward is defined
+        "repetition_penalty": get_repetition_penalty_reward(
             ngram_size=script_args.repetition_n_grams,
             max_penalty=script_args.repetition_max_penalty,
         ),
@@ -434,55 +430,26 @@ def get_reward_functions(script_args):
     return reward_funcs_list
 
 
-# Our callback function which will track loss and other important info.
-
-
-logger = logging.getLogger(__name__)
-
-
-class LoggingCallback(TrainerCallback):
-    """
-    A simple callback for logging training information at specific steps.
-    """
-
-    def on_step_end(
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ):
-        if state.global_step % args.logging_steps == 0:
-            logger.info(
-                f"Step {state.global_step}: Loss = {state.log_history[-1].get('loss', None)}, Learning Rate = {state.log_history[-1].get('learning_rate', None)}"
-            )
-
-
 def get_callbacks(training_args, model_args, script_args):
     """
     Returns a list of callbacks to be used during training.
     For now, it includes only the LoggingCallback. You can extend this to add more callbacks.
     """
-    callbacks = [LoggingCallback()]  # Instantiate our LoggingCallback
+    callbacks = [ProgressCallback()]  # Instantiate our LoggingCallback
     return callbacks
 
-
-# Finally, initializing these function.
 
 # Get reward functions and callbacks
 reward_functions = get_reward_functions(script_args)
 callbacks = get_callbacks(training_args, model_args, script_args)
-
-
-# ## GRPO Training Loop
-
 
 # Create GRPOConfig from TrainingArguments
 grpo_config = GRPOConfig(
     **training_args.to_dict(),  # Convert TrainingArguments to dictionary and unpack
     **{
         # REMOVED model_init_kwargs here
-        # We are passing the instantiated 'model' object, so GRPOTrainer doesn't need model_init_kwargs
+        # We are passing the instantiated 'model' object,
+        # so GRPOTrainer doesn't need model_init_kwargs
     },
 )
 
@@ -495,19 +462,8 @@ grpo_trainer = GRPOTrainer(
     callbacks=callbacks,  # List of callbacks
 )
 
-
-# We can now start the **Training Loop**! This is as simple as calling the train() method on our grpo_trainer.
-
-
 # Start the GRPO Training Loop
 train_result = grpo_trainer.train()
-
-
-# When you run this cell, you should see the training process begin.
-
-
-# ## Saving Tiny R1 Zero LLM
-
 
 # Define the path to your trained model (same as OUTPUT_DIR)
 TRAINED_MODEL_PATH = "data/Qwen-GRPO-training"
