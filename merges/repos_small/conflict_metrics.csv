@@ -1,8 +1,8 @@
 conflict_id,full_conflict_size,context_before_size,conflict_size,context_after_size,resolution_size,parent1_size,parent2_size,base_size
-21a1,85,3,79,3,34,66,10,-1
 2a1,16,3,10,3,3,4,3,-1
 64a1,14,3,8,3,26,4,1,-1
 64a2,14,3,8,3,10,5,0,-1
 64a3,14,3,8,3,10,5,0,-1
 64a4,42,3,36,3,25,33,0,-1
 64a5,37,3,31,3,38,24,4,-1
+7a1,85,3,79,3,34,66,10,-1

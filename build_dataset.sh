@@ -6,11 +6,9 @@ OUT_DIR=$2
 
 
 # Skip if merges.csv already exists
-if [ ! -f $OUT_DIR/merges.csv ]; then
-    python3 src/find_merges.py \
+python3 src/find_merges.py \
     --repos $REPOS_DIR \
     --output_file $OUT_DIR/merges.csv
-fi
 
 python3 src/extract_conflict_files.py \
     --merges $OUT_DIR/merges.csv \
