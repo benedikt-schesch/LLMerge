@@ -20,7 +20,7 @@ import wandb
 from build_dataset import validate_dataset
 
 # Parameters
-MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
+MODEL_NAME = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 OUTPUT_DIR = "data/Qwen-GRPO-training"
 DATASET_PATH = "merges/repos_50/dataset"  # Path produced by build_dataset.py
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -31,7 +31,7 @@ print(f"Using device: {device}")
 wandb.init(project="LLMerge", entity="b-schesch")  # type: ignore
 
 
-def get_model(device):
+def get_model_and_tokenizer(device):
     """Get the model and tokenizer for training."""
     # Initialize tokenizer with chat template
     tokenizer = AutoTokenizer.from_pretrained(
@@ -52,6 +52,8 @@ def get_model(device):
         MODEL_NAME, trust_remote_code=True, torch_dtype=torch.bfloat16
     )
 
+    model.generation_config.pad_token_id = model.generation_config.eos_token_id
+
     print(f"Model parameters: {model.num_parameters():,}")
 
     # Move model to the appropriate device
@@ -61,7 +63,7 @@ def get_model(device):
 
 
 # Test basic inference
-def test_model_inference(user_input: str | List[Dict[str, str]]):
+def test_model_inference(model, tokenizer, user_input: str | List[Dict[str, str]]):
     """Test basic model inference with the loaded model and tokenizer."""
     if isinstance(user_input, str):
         messages = [
@@ -85,30 +87,6 @@ def test_model_inference(user_input: str | List[Dict[str, str]]):
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return response
 
-
-model, tokenizer = get_model(device)
-
-# Test the model
-response = test_model_inference("how are you?")
-print("Test Input: how are you?")
-print(f"Model Response: {response}")
-
-dataset = load_from_disk(DATASET_PATH)
-
-# Validate dataset
-validate_dataset(dataset)
-
-print(
-    f"Loaded dataset: {len(dataset['train'])} training "
-    "samples and {len(dataset['test'])} test samples."
-)
-
-# Give an example prompt and test the model
-sample = dataset["train"][0]
-prompt = sample["prompt"]
-print(f"Example prompt: {prompt}")
-response = test_model_inference(prompt)
-print(f"Model response: {response}")
 
 # Reward Functions
 
@@ -142,7 +120,7 @@ def format_markdown_reward(completions, **kwargs):
     ```
     """
     # Define the improved regex pattern
-    pattern = r"^```java\n([\s\S]*?)```$"
+    pattern = r"^```java\n([\s\S]+?)```$"
 
     # Extract the content from each completion
     completion_contents = [completion[0]["content"] for completion in completions]
@@ -433,39 +411,64 @@ def get_callbacks(training_args, model_args, script_args):
     return callbacks
 
 
-# Get reward functions and callbacks
-reward_functions = get_reward_functions(script_args)
-callbacks = get_callbacks(training_args, model_args, script_args)
+if __name__ == "__main__":
+    model, tokenizer = get_model_and_tokenizer(device)
 
-# Create GRPOConfig from TrainingArguments
-grpo_config = GRPOConfig(
-    **training_args.to_dict(),  # Convert TrainingArguments to dictionary and unpack
-    **{
-        # REMOVED model_init_kwargs here
-        # We are passing the instantiated 'model' object,
-        # so GRPOTrainer doesn't need model_init_kwargs
-    },
-)
+    # Test the model
+    response = test_model_inference(model, tokenizer, "how are you?")
+    print("Test Input: how are you?")
+    print(f"Model Response: {response}")
 
-grpo_trainer = GRPOTrainer(
-    model=model,  # Our initialized Qwen model
-    reward_funcs=reward_functions,  # List of reward functions from previous step
-    args=grpo_config,  # GRPOConfig (created from TrainingArguments)
-    train_dataset=dataset["train"],  # Training dataset
-    eval_dataset=dataset["test"],  # Evaluation dataset
-    callbacks=callbacks,  # List of callbacks
-)
+    dataset = load_from_disk(DATASET_PATH)
 
-# Start the GRPO Training Loop
-train_result = grpo_trainer.train()
+    # Validate dataset
+    validate_dataset(dataset)
 
-# Define the path to your trained model (same as OUTPUT_DIR)
-TRAINED_MODEL_PATH = "data/Qwen-GRPO-training"
+    print(
+        f"Loaded dataset: {len(dataset['train'])} training "
+        "samples and {len(dataset['test'])} test samples."
+    )
 
-# Save the tokenizer
-tokenizer.save_pretrained(TRAINED_MODEL_PATH)
+    # Give an example prompt and test the model
+    sample = dataset["train"][0]
+    prompt = sample["prompt"]
+    print(f"Example prompt: {prompt}")
+    response = test_model_inference(model, tokenizer, prompt)
+    print(f"Model response: {response}")
 
-# Save the trained model
-grpo_trainer.save_model(TRAINED_MODEL_PATH)
+    # Get reward functions and callbacks
+    reward_functions = get_reward_functions(script_args)
+    callbacks = get_callbacks(training_args, model_args, script_args)
 
-print(f"GRPO Trained model saved to {TRAINED_MODEL_PATH}")
+    # Create GRPOConfig from TrainingArguments
+    grpo_config = GRPOConfig(
+        **training_args.to_dict(),  # Convert TrainingArguments to dictionary and unpack
+        **{
+            # REMOVED model_init_kwargs here
+            # We are passing the instantiated 'model' object,
+            # so GRPOTrainer doesn't need model_init_kwargs
+        },
+    )
+
+    grpo_trainer = GRPOTrainer(
+        model=model,  # Our initialized Qwen model
+        reward_funcs=reward_functions,  # List of reward functions from previous step
+        args=grpo_config,  # GRPOConfig (created from TrainingArguments)
+        train_dataset=dataset["train"],  # Training dataset
+        eval_dataset=dataset["test"],  # Evaluation dataset
+        callbacks=callbacks,  # List of callbacks
+    )
+
+    # Start the GRPO Training Loop
+    train_result = grpo_trainer.train()
+
+    # Define the path to your trained model (same as OUTPUT_DIR)
+    TRAINED_MODEL_PATH = "data/Qwen-GRPO-training"
+
+    # Save the tokenizer
+    tokenizer.save_pretrained(TRAINED_MODEL_PATH)
+
+    # Save the trained model
+    grpo_trainer.save_model(TRAINED_MODEL_PATH)
+
+    print(f"GRPO Trained model saved to {TRAINED_MODEL_PATH}")
