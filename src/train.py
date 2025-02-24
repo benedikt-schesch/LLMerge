@@ -116,9 +116,7 @@ print(f"Model response: {response}")
 # Accuracy Reward
 def accuracy_reward(completions, **kwargs):
     """
-    Reward function to check if the model's response is mathematically
-    equivalent to the ground truth solution.
-    Uses latex2sympy2 for parsing and math_verify for validation.
+    Reward if the correct solution is present in the completion.
     """
 
     # Extract responses
@@ -126,6 +124,8 @@ def accuracy_reward(completions, **kwargs):
     # rewards = []
 
     solutions = kwargs.get("solution")  # Get solutions from kwargs
+
+    # for (content, sol) in zip(contents, solutions):
 
     if solutions is None:
         return [0.5] * len(completions)  # Return neutral reward if no solution

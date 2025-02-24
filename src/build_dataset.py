@@ -109,7 +109,7 @@ def load_conflict_dataset(conflict_blocks_dir: str):
             "No valid conflict/solution pairs were found in the specified directory."
         )
 
-    data = {"query": queries, "solution": solutions}
+    data = {"problem": queries, "solution": solutions}
     dataset = Dataset.from_dict(data)
     return dataset
 
@@ -117,15 +117,11 @@ def load_conflict_dataset(conflict_blocks_dir: str):
 def make_conversation(example):
     """
     Converts a single dataset example into a conversation format.
-    Includes:
-      - 'prompt': a list of messages (system prompt and user query)
-      - 'problem': the ground-truth solution (used for reward computation during training)
     """
     return {
-        "problem": example["solution"],
         "prompt": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": example["query"]},
+            {"role": "user", "content": example["problem"]},
         ],
     }
 
