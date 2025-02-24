@@ -16,8 +16,8 @@ from transformers import (
     TrainingArguments,
 )
 from trl import GRPOConfig, GRPOTrainer
-from build_dataset import validate_dataset
 import wandb
+from build_dataset import validate_dataset
 
 # Parameters
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
