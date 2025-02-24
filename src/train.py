@@ -10,15 +10,8 @@ from typing import Dict, List, Optional
 # Import PyTorch and Hugging Face Transformers
 import torch
 from datasets import load_from_disk
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    TrainerCallback,
-    TrainerControl,
-    TrainerState,
-    TrainingArguments,
-)
-
+from transformers import (AutoModelForCausalLM, AutoTokenizer, TrainerCallback,
+                          TrainerControl, TrainerState, TrainingArguments)
 # Import libraries from TRL (Transformers Reinforcement Learning)
 from trl import GRPOConfig, GRPOTrainer
 
@@ -116,7 +109,7 @@ print(f"Example prompt: {prompt}")
 response = test_model_inference(prompt)
 print(f"Model response: {response}")
 
-
+print("==== START TRAINING ====")
 # Reward Functions
 
 
