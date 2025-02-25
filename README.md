@@ -17,6 +17,26 @@ uv sync
 source .venv/bin/activate
 ```
 
+## Faster dataset construction with GIL-Free Python
+
+The dataset building part relies on multithreading which is slowed down by the Python GIL.
+To bypass the GIL use the latest GIL free Python version.
+To install GIL free Python run:
+
+```bash
+uv venv gil_free_venv --python 3.13t
+source gil_free_venv/bin/activate
+uv pip install -r requirements_dataset_building.txt
+```
+
+With this environment you can *only* run the dataset creation scripts since the latest libraries don't properly support this version of python yet.
+You can now run:
+
+```bash
+PYTHON_GIL=0 ./build_dataset_small.sh
+```
+
+
 ## Usage
 
 ### Run small example

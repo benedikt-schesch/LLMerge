@@ -1,0 +1,4 @@
+GitPython
+loguru
+pandas
+rich

@@ -3,7 +3,7 @@
 .gradle
 .venv
 repos/
-venv2/
+gil_free_env/
 **.lock
 .workdir/
 **/file_conflicts
