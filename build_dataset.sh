@@ -4,18 +4,12 @@
 REPOS_DIR=$1
 OUT_DIR=$2
 
-
-# Skip if merges.csv already exists
-python3 src/find_merges.py \
+python3 src/get_conflict_files.py \
     --repos $REPOS_DIR \
-    --output_file $OUT_DIR/merges.csv
-
-python3 src/extract_conflict_files.py \
-    --merges $OUT_DIR/merges.csv \
-    --output_dir $OUT_DIR/file_conflicts
+    --output_dir $OUT_DIR
 
 python3 src/extract_conflict_blocks.py \
-    --conflict_dir $OUT_DIR/file_conflicts \
+    --input_dir $OUT_DIR/conflict_files \
     --output_dir $OUT_DIR/conflict_blocks
 
 python src/metrics_conflict_blocks.py \

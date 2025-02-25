@@ -5,8 +5,8 @@ CreateConflictDataset_ContextMatching.py
 
 Usage:
     python CreateConflictDataset_ContextMatching.py \
-        --conflict_dir path/to/file_conflicts \
-        --output_dir /path/to/output_folder \
+        --conflict_dir path/to/conflict_files \
+        --output_dir /path/to/base_output_folder \
         --context 3
 
 This script:
@@ -26,7 +26,6 @@ This script:
 """
 
 import argparse
-import sys
 from pathlib import Path
 from typing import List, Tuple
 
@@ -197,7 +196,7 @@ def process_conflict_file(  # pylint: disable=too-many-locals
             resolved_lines = extract_resolved_code(merged_lines, before_ctx, after_ctx)
         except ValueError:
             logger.warning(
-                f"Skipping conflict block {basename}{n} due to missing resolved code."
+                f"Skipping conflict block {basename}={n} due to missing resolved code."
             )
             continue
         resolved_snippet = (
@@ -208,12 +207,12 @@ def process_conflict_file(  # pylint: disable=too-many-locals
             logger.error("Resolved snippet consistency check failed.")
             raise ValueError("Resolved snippet not found in merged file.")
 
-        conflict_output = output_dir / f"{basename}{n}.conflict"
-        resolved_output = output_dir / f"{basename}{n}.resolved_conflict"
+        conflict_output = output_dir / f"{basename}-{n}.conflict"
+        resolved_output = output_dir / f"{basename}-{n}.resolved_conflict"
 
         conflict_output.write_text(conflict_snippet, encoding="utf-8")
         resolved_output.write_text(resolved_snippet, encoding="utf-8")
-        logger.info(f"Successfully processed conflict block {basename}{n}")
+        logger.info(f"Successfully processed conflict block {basename}-{n}")
 
 
 def main():
@@ -222,15 +221,14 @@ def main():
         description="Extract conflict blocks using context matching from conflict files."
     )
     parser.add_argument(
-        "--conflict_dir",
-        default="merges/repos_small/file_conflicts",
-        help="Base directory containing .conflict and .final_merged files",
+        "--input_dir",
+        default="merges/repos_small/conflict_files",
+        help="Processing directory",
     )
     parser.add_argument(
         "--output_dir",
         default="merges/repos_small/conflict_blocks",
-        help="Output directory for <basename><n>.conflict and "
-        "<basename><n>.resolved_conflict files",
+        help="Output directory for conflict snippets",
     )
     parser.add_argument(
         "--context",
@@ -240,12 +238,12 @@ def main():
     )
     args = parser.parse_args()
 
-    conflict_dir = Path(args.conflict_dir)
+    input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    conflict_files = sorted(conflict_dir.rglob("*.conflict"))
-    logger.info(f"Found {len(conflict_files)} conflict file(s) in {conflict_dir}")
+    conflict_files = sorted(input_dir.rglob("*.conflict"))
+    conflict_files = [f for f in conflict_files if "conflict_blocks" not in f.parts]
+    logger.info(f"Found {len(conflict_files)} conflict file(s) in {input_dir}")
 
     with Progress() as progress:
         task = progress.add_task(
@@ -255,10 +253,11 @@ def main():
             final_file = cfile.with_suffix(".final_merged")
             if not final_file.exists():
                 logger.warning(f"No matching .final_merged for {cfile}")
-                sys.stderr.write(f"No matching .final_merged for {cfile}\n")
                 progress.advance(task)
                 continue
-            process_conflict_file(cfile, final_file, args.context, output_dir)
+            process_conflict_file(
+                cfile, final_file, args.context, output_dir=output_dir
+            )
             progress.advance(task)
 
     logger.info(f"Done processing conflict files. Output is in {output_dir}")

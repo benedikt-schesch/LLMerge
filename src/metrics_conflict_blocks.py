@@ -197,7 +197,7 @@ def main():  # pylint: disable=too-many-locals
 
         # Prepare row data
         row_data = {"conflict_id": identifier}
-        row_data.update(metrics)
+        row_data.update(metrics)  # type: ignore
         rows.append(row_data)
 
     # Create a pandas DataFrame from the list of rows and write it to CSV

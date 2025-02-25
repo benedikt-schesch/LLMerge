@@ -128,9 +128,9 @@ def evaluate_accuracy(model, tokenizer, dataset, device):  # pylint: disable=too
 
     # Compute final percentages.
     results = {
-        "markdown_formatting": (count_correct_markdown / total) * 100
-        if total > 0
-        else 0.0,
+        "markdown_formatting": (
+            (count_correct_markdown / total) * 100 if total > 0 else 0.0
+        ),
         "correct_code": (count_correct_code / total) * 100 if total > 0 else 0.0,
         "merge_conflict": (count_merge_conflict / total) * 100 if total > 0 else 0.0,
     }
