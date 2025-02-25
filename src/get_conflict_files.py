@@ -19,6 +19,7 @@ list of conflict file IDs.
 
 import argparse
 import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import shutil
 from pathlib import Path
@@ -158,9 +159,7 @@ def reproduce_merge_and_extract_conflicts(
     return result
 
 
-def process_single_repo(
-    repo_slug: str, repo_idx: int, output_dir: Path
-) -> pd.DataFrame:
+def process_single_repo(repo_slug: str, repo_idx: int, output_dir: Path):
     """
     Worker function to handle all merges for one repository.
     Uses a cache (a CSV file) that records, for each merge,
@@ -201,13 +200,17 @@ def process_single_repo(
             logger.info(f"Skipping {repo_slug} as all conflicts are already processed.")
             return cache_df
 
-    repo = get_repo(repo_slug)
+    try:
+        repo = get_repo(repo_slug)
+    except Exception as e:
+        logger.error(f"Error cloning {repo_slug}: {e}")
+        return pd.DataFrame()
     merges = get_merges(repo, repo_slug, output_dir / "merges")
 
     cache_df = merges.copy()
     cache_df["conflicts"] = ""
 
-    for merge_id, merge_row in merges.iterrows():
+    def process_merge(merge_id, merge_row):
         temp_dir = WORKING_DIR / f"{repo_slug}_merge_{merge_id}"
         shutil.copytree(repo.working_dir, temp_dir)
         temp_repo = Repo(temp_dir)
@@ -226,15 +229,23 @@ def process_single_repo(
                 f"Error reproducing merge {merge_row['merge_commit']} in {repo_slug}: {e}"
             )
             conflicts = []
-        cache_df.at[merge_id, "conflicts"] = ";".join(conflicts)
         shutil.rmtree(temp_dir, ignore_errors=True)
+        return merge_id, ";".join(conflicts)
+
+    with ThreadPoolExecutor(max_workers=32) as executor:
+        futures = {
+            executor.submit(process_merge, merge_id, merge_row): merge_id
+            for merge_id, merge_row in merges.iterrows()
+        }
+        for future in as_completed(futures):
+            merge_id, conflict_str = future.result()
+            cache_df.at[merge_id, "conflicts"] = conflict_str
 
     # Save the updated cache
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_df.to_csv(cache_file)
     # Also clean up the original repo clone, if any
     shutil.rmtree(repo.working_dir, ignore_errors=True)
-    return cache_df
 
 
 def main():
@@ -254,7 +265,7 @@ def main():
         "--n_threads",
         required=False,
         type=int,
-        default=0,
+        default=None,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     args = parser.parse_args()
@@ -275,8 +286,6 @@ def main():
             output_dir=output_dir,
         )
 
-    results = []
-
     if num_workers is not None and num_workers < 2:
         for task in [(m[1], output_dir) for m in repos_df.iterrows()]:
             worker(task)
@@ -290,8 +299,7 @@ def main():
                 )
                 for f in concurrent.futures.as_completed(futures):
                     try:
-                        result = f.result()
-                        results.append(result)
+                        f.result()
                     except Exception as exc:
                         logger.error(f"Worker thread raised an exception: {exc}")
                     progress.advance(progress_task)

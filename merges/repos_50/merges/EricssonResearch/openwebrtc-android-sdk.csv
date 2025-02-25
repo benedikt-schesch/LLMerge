@@ -1,0 +1,2 @@
+idx,repository,branch_name,merge_commit,parent_1,parent_2,notes
+0,EricssonResearch/openwebrtc-android-sdk,refs/heads/master,48b9c676da56ce7996c1d7931f3e897554067c71,6555cf50f35b4badb177496bfa7369a8e4a718d2,790c9d1a8b3918d18a0a722a8f351703fe57adf0,a parent is the base
