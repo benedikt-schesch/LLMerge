@@ -23,15 +23,12 @@ from variables import MODEL, MAX_PROMPT_LENGTH
 logger.add("run.log")
 
 # Define the system prompt used in conversation formatting.
-SYSTEM_PROMPT = """
-Respond in the following format:
-<think>
-...
-</think>
-<answer>
-...
-</answer>
-"""
+SYSTEM_PROMPT = (
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think><answer> answer here </answer>"
+)
 
 QUERY_PROMPT = (
     "You are a semantic merge conflict resolution expert. Below is a snippet of code "

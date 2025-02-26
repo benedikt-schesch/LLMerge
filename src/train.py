@@ -28,35 +28,13 @@ def extract_xml_answer(text: str) -> str:
 JAVA_MARKDOWN_PATTERN = r"```java\s*\n.*?```"
 
 
-def java_markdown_weak_reward_func(completions, **kwargs) -> list[float]:
-    """
-    Checks if the entire solution (i.e. the complete response) contains Java markdown formatting.
-    This version is 'weak' as it does not restrict the check to the answer block.
-    """
-    responses = [completion[0]["content"] for completion in completions]
-    rewards = []
-    for r in responses:
-        # Search for a java code block anywhere in the response.
-        if re.search(JAVA_MARKDOWN_PATTERN, r, re.DOTALL):
-            rewards.append(1.0)
-        else:
-            rewards.append(0.0)
-    return rewards
-
-
-def java_markdown_strong_reward_func(completions, **kwargs) -> list[float]:
+def java_markdown_reward(completions, **kwargs) -> list[float]:
     """
     Checks if the answer block (extracted via extract_xml_answer) contains Java markdown formatting.
     This version is 'strong' because it only considers the content within the answer block.
     """
     responses = [completion[0]["content"] for completion in completions]
-    rewards = []
-    for r in responses:
-        answer_block = extract_xml_answer(r)
-        if re.search(JAVA_MARKDOWN_PATTERN, answer_block, re.DOTALL):
-            rewards.append(1.0)
-        else:
-            rewards.append(0.0)
+    rewards = [1.0 if re.search(JAVA_MARKDOWN_PATTERN, extract_xml_answer(r), re.DOTALL) else 0.0 for r in responses]
     return rewards
 
 
@@ -97,9 +75,9 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
     return [2.0 if a in r else 0.0 for r, a in zip(extracted_responses, answer)]
 
 
-def strict_format_reward_func(completions, **kwargs) -> list[float]:
+def format_reward(completions, **kwargs) -> list[float]:
     """Reward function that checks if the completion has a specific format."""
-    pattern = r"^.*?\n</think>\n<answer>\n.*?\n</answer>\n$"
+    pattern = r"^.*?\n</think>\n<answer>\n.*?\n</answer>$"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
@@ -146,7 +124,7 @@ if __name__ == "__main__":
         fp16=not is_bfloat16_supported(),
         per_device_train_batch_size=1,
         gradient_accumulation_steps=1,  # Increase to 4 for smoother training
-        num_generations=8,  # Decrease if out of memory
+        num_generations=16,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_SEQ_LENGTH,
         temperature=0.7,
@@ -163,9 +141,8 @@ if __name__ == "__main__":
         model=model,
         processing_class=tokenizer,
         reward_funcs=[
-            java_markdown_weak_reward_func,
-            java_markdown_strong_reward_func,
-            strict_format_reward_func,
+            java_markdown_reward,
+            format_reward,
             correctness_reward_func,
         ],
         args=training_args,
