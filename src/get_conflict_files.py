@@ -232,7 +232,7 @@ def process_single_repo(repo_slug: str, repo_idx: int, output_dir: Path):
         shutil.rmtree(temp_dir, ignore_errors=True)
         return merge_id, ";".join(conflicts)
 
-    with ThreadPoolExecutor(max_workers=32) as executor:
+    with ThreadPoolExecutor(max_workers=16) as executor:
         futures = {
             executor.submit(process_merge, merge_id, merge_row): merge_id
             for merge_id, merge_row in merges.iterrows()
@@ -265,7 +265,7 @@ def main():
         "--n_threads",
         required=False,
         type=int,
-        default=None,
+        default=6,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     args = parser.parse_args()
