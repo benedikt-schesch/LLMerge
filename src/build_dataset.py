@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Dict, List, Union
 
 from datasets import Dataset, DatasetDict
+from transformers import AutoTokenizer
+
+from rich.progress import track
+
+from variables import MODEL, MAX_PROMPT_LENGTH
 
 # Define the system prompt used in conversation formatting.
 SYSTEM_PROMPT = """
@@ -39,7 +44,7 @@ def build_query(conflict_query):
     return QUERY_PROMPT + "```java\n" + conflict_query + "\n```"
 
 
-def load_conflict_dataset(
+def load_conflict_dataset(  # pylint: disable=too-many-locals
     conflict_blocks_dir: str, max_line_count: int = 20
 ) -> Dataset:
     """
@@ -54,7 +59,11 @@ def load_conflict_dataset(
     queries = []
     solutions = []
 
-    for conflict_file in conflict_files:
+    tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
+
+    for conflict_file in track(
+        conflict_files, description="Processing conflict files..."
+    ):  # Wrapped in progress bar
         # The corresponding resolved file should have the same stem with .resolved_conflict extension.
         resolved_file = conflict_file.with_name(
             conflict_file.stem + ".resolved_conflict"
@@ -76,6 +85,12 @@ def load_conflict_dataset(
             )
             continue
         query = build_query(conflict_query)
+        token_length = len(tokenizer(query)["input_ids"])
+        if token_length > MAX_PROMPT_LENGTH:
+            print(
+                f"Skipping {conflict_file} because it has more than {MAX_PROMPT_LENGTH} tokens."
+            )
+            continue
         queries.append(query)
         solutions.append(solution_text)
 

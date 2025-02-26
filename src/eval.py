@@ -21,7 +21,6 @@ import re
 import torch
 from datasets import load_from_disk
 from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
-from train import get_model_and_tokenizer
 
 
 def is_valid_conflict(extracted_code):
@@ -155,7 +154,7 @@ def main():
     print(f"Using device: {device}")
 
     print("Loading model and tokenizer...")
-    model, tokenizer = get_model_and_tokenizer(device)
+    model, tokenizer = None, None  # TODO: Load model and tokenizer here.
 
     print(f"Loading dataset from {args.dataset_path} ...")
     dataset = load_from_disk(args.dataset_path)

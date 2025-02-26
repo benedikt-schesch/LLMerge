@@ -7,6 +7,7 @@ import re
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
+from variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH
 
 PatchFastRL("GRPO", FastLanguageModel)
 
@@ -14,34 +15,6 @@ os.environ["WANDB_PROJECT"] = "LLMerge"
 
 
 dataset = load_from_disk("merges/repos_50/dataset")
-MAX_SEQ_LENGTH = 8192  # Can increase for longer reasoning traces
-LORA_RANK = 64  # Larger rank = smarter, but slower
-
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="unsloth/deepSeek-r1-distill-qwen-1.5b",
-    max_seq_length=MAX_SEQ_LENGTH,
-    load_in_4bit=True,  # False for LoRA 16bit
-    fast_inference=True,  # Enable vLLM fast inference
-    max_lora_rank=LORA_RANK,
-    gpu_memory_utilization=0.5,  # Reduce if out of memory
-)
-
-model = FastLanguageModel.get_peft_model(
-    model,
-    r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-    target_modules=[
-        "q_proj",
-        "k_proj",
-        "v_proj",
-        "o_proj",
-        "gate_proj",
-        "up_proj",
-        "down_proj",
-    ],  # Remove QKVO if out of memory
-    lora_alpha=LORA_RANK,
-    use_gradient_checkpointing="unsloth",  # Enable long context finetuning
-    random_state=3407,
-)
 
 
 # Load and prep dataset
@@ -122,83 +95,71 @@ def soft_format_reward_func(completions, **kwargs) -> list[float]:
     return [0.5 if match else 0.0 for match in matches]
 
 
-training_args = GRPOConfig(
-    use_vllm=True,  # use vLLM for fast inference!
-    learning_rate=5e-6,
-    adam_beta1=0.9,
-    adam_beta2=0.99,
-    weight_decay=0.1,
-    warmup_ratio=0.1,
-    lr_scheduler_type="cosine",
-    optim="adamw_8bit",
-    logging_steps=1,
-    bf16=is_bfloat16_supported(),
-    fp16=not is_bfloat16_supported(),
-    per_device_train_batch_size=1,
-    gradient_accumulation_steps=1,  # Increase to 4 for smoother training
-    num_generations=8,  # Decrease if out of memory
-    max_prompt_length=4096,
-    max_completion_length=MAX_SEQ_LENGTH,
-    temperature=0.7,
-    # num_train_epochs = 1, # Set to 1 for a full training run
-    max_steps=250,
-    save_steps=250,
-    max_grad_norm=0.1,
-    report_to="wandb",
-    output_dir="outputs",
-    run_name="testing",
-)
+if __name__ == "__main__":
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=MODEL,
+        max_seq_length=MAX_SEQ_LENGTH,
+        load_in_4bit=True,  # False for LoRA 16bit
+        fast_inference=True,  # Enable vLLM fast inference
+        max_lora_rank=LORA_RANK,
+        gpu_memory_utilization=0.5,  # Reduce if out of memory
+    )
 
-trainer = GRPOTrainer(
-    model=model,
-    processing_class=tokenizer,
-    reward_funcs=[
-        java_markdown_weak_reward_func,
-        java_markdown_strong_reward_func,
-        soft_format_reward_func,
-        strict_format_reward_func,
-        correctness_reward_func,
-    ],
-    args=training_args,
-    train_dataset=dataset["train"],
-)
-trainer.train()
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],  # Remove QKVO if out of memory
+        lora_alpha=LORA_RANK,
+        use_gradient_checkpointing="unsloth",  # Enable long context finetuning
+        random_state=3407,
+    )
 
+    training_args = GRPOConfig(
+        use_vllm=True,  # use vLLM for fast inference!
+        learning_rate=5e-6,
+        adam_beta1=0.9,
+        adam_beta2=0.99,
+        weight_decay=0.1,
+        warmup_ratio=0.1,
+        lr_scheduler_type="cosine",
+        optim="adamw_8bit",
+        logging_steps=1,
+        bf16=is_bfloat16_supported(),
+        fp16=not is_bfloat16_supported(),
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=1,  # Increase to 4 for smoother training
+        num_generations=8,  # Decrease if out of memory
+        max_prompt_length=MAX_PROMPT_LENGTH,
+        max_completion_length=MAX_SEQ_LENGTH,
+        temperature=0.7,
+        # num_train_epochs = 1, # Set to 1 for a full training run
+        max_steps=250,
+        save_steps=250,
+        max_grad_norm=0.1,
+        report_to="wandb",
+        output_dir="outputs",
+        run_name="testing",
+    )
 
-# SYSTEM_PROMPT = """
-# Respond in the following format:
-# <reasoning>
-# ...
-# </reasoning>
-# <answer>
-# ...
-# </answer>
-# """
-
-# XML_COT_FORMAT = """\
-# <reasoning>
-# {reasoning}
-# </reasoning>
-# <answer>
-# {answer}
-# </answer>
-# """
-
-# def extract_hash_answer(text: str) -> str | None:
-#     if "####" not in text:
-#         return None
-#     return text.split("####")[1].strip()
-
-# # uncomment middle messages for 1-shot prompting
-# def get_gsm8k_questions(split = "train") -> Dataset:
-#     data = load_dataset('openai/gsm8k', 'main')[split] # type: ignore
-#     data = data.map(lambda x: { # type: ignore
-#         'prompt': [
-#             {'role': 'system', 'content': SYSTEM_PROMPT},
-#             {'role': 'user', 'content': x['question']}
-#         ],
-#         'answer': extract_hash_answer(x['answer'])
-#     }) # type: ignore
-#     return data # type: ignore
-
-# dataset = get_gsm8k_questions()
+    trainer = GRPOTrainer(
+        model=model,
+        processing_class=tokenizer,
+        reward_funcs=[
+            java_markdown_weak_reward_func,
+            java_markdown_strong_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            correctness_reward_func,
+        ],
+        args=training_args,
+        train_dataset=dataset["train"],
+    )
+    trainer.train()
