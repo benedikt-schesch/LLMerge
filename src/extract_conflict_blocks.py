@@ -32,6 +32,8 @@ from typing import List, Tuple
 from loguru import logger
 from rich.progress import Progress
 
+logger.add("run.log", rotation="10 MB", backtrace=True, diagnose=True)
+
 MAX_CONTEXT_RESOLUTION_EXTRACTION = 20
 
 
@@ -129,40 +131,87 @@ def get_before_after_context(
     return before_context, after_context
 
 
+# TODO: Improve this function
 def gather_conflict_plus_context(
     lines: List[str], start_idx: int, end_idx: int, context: int
-) -> str:
+) -> Tuple[str, List[str], List[str]]:
     """
     Returns a snippet containing the conflict block (with markers) plus
     N lines before and N lines after.
     """
-    snippet = lines[
-        max(0, start_idx - context) : min(len(lines), end_idx + 1 + context)
-    ]
-    return "".join(snippet)
+    context_begin_idx = max(0, start_idx - context)
+    context_end_idx = min(len(lines), end_idx + 1 + context)
+    before_context = lines[context_begin_idx:start_idx]
+    after_context = lines[end_idx + 1 : context_end_idx]
+    snippet = lines[context_begin_idx : min(len(lines), context_end_idx)]
+    return "".join(snippet), before_context, after_context
 
 
 def extract_resolved_code(
-    merged_lines: List[str], before_context: List[str], after_context: List[str]
-) -> List[str]:
+    merged_lines: List[str], conflict_lines: List[str], start_idx: int, end_idx: int
+) -> Tuple[List[str], List[str], List[str]]:
     """
-    1. Finds `before_context` in merged_lines (exact line match).
-    2. Starting immediately after that block, finds `after_context`.
-    3. Returns the lines in between as the resolved code.
-    Returns an empty list if not found.
+    Extracts the resolved code from the merged file by matching the context
+    before and after the conflict block.
     """
-    i1 = match_subsequence(merged_lines, before_context, 0)
+
+    before_ctx, after_ctx = get_before_after_context(conflict_lines, start_idx, end_idx)
+
+    i1 = match_subsequence(merged_lines, before_ctx, 0)
     if i1 < 0:
         logger.error("Before context not found in merged file.")
-        return []
-    i2 = match_subsequence(merged_lines, after_context, 0)
+        raise ValueError("Before context not found in merged file.")
+    start_search = i1 + len(before_ctx)
+    i2 = match_subsequence(merged_lines, after_ctx, start_search)
     if i2 < 0 or i1 >= i2:
         logger.warning(
             "Resolved code not found in merged file due to context ordering."
         )
         raise ValueError("Resolved code not found in merged file.")
-    start_after = i1 + len(before_context)
-    return merged_lines[start_after:i2]
+    start_after = i1 + len(before_ctx)
+    merged_before_ctx = merged_lines[i1:start_after]
+    merged_after_ctx = merged_lines[i2 : i2 + len(after_ctx)]
+    return merged_lines[start_after:i2], merged_before_ctx, merged_after_ctx
+
+
+def check_coherence(
+    ctx_conflict: List[str], ctx_merged: List[str], alignment: str
+) -> None:
+    """
+    Checks that the shorter context is fully contained in the corresponding
+    portion (prefix or suffix) of the longer context. Raises ValueError if not.
+
+    :param ctx_conflict: context lines from the conflict file
+    :param ctx_merged:   context lines from the merged file
+    :param alignment:    'prefix' or 'suffix'
+    """
+    if not ctx_conflict or not ctx_merged:
+        # If one is empty, no conflict so no check needed
+        return
+
+    len_conflict = len(ctx_conflict)
+    len_merged = len(ctx_merged)
+
+    # Identify the common length to compare
+    common_length = min(len_conflict, len_merged)
+
+    if alignment == "prefix":
+        # Compare from the start
+        conflict_slice = ctx_conflict[:common_length]
+        merged_slice = ctx_merged[:common_length]
+    elif alignment == "suffix":
+        # Compare from the end
+        conflict_slice = ctx_conflict[-common_length:]
+        merged_slice = ctx_merged[-common_length:]
+    else:
+        raise ValueError(f"Unknown alignment '{alignment}'")
+
+    if conflict_slice != merged_slice:
+        raise ValueError(
+            f"Incoherent context in {alignment} check. "
+            f"Conflict context slice: {conflict_slice} "
+            f"vs Merged context slice: {merged_slice}"
+        )
 
 
 def process_conflict_file(  # pylint: disable=too-many-locals
@@ -177,6 +226,7 @@ def process_conflict_file(  # pylint: disable=too-many-locals
            * Uses up to 20 lines of marker-free context to match inside the final_merged.
            * Extracts the resolved code from final_merged.
            * Writes conflict snippet and resolved snippet.
+           * Performs coherence checks on before/after contexts.
     """
     basename = conflict_file.stem  # e.g. "1a" from "1a.conflict"
     logger.info(f"Processing file: {conflict_file}")
@@ -186,27 +236,57 @@ def process_conflict_file(  # pylint: disable=too-many-locals
     logger.info(f"Found {len(blocks)} conflict block(s) in {conflict_file}")
 
     for n, (start_idx, end_idx) in enumerate(blocks, start=1):
-        conflict_snippet = gather_conflict_plus_context(
+        conflict_snippet, before_ctx, after_ctx = gather_conflict_plus_context(
             conflict_lines, start_idx, end_idx, context
         )
-        before_ctx, after_ctx = get_before_after_context(
-            conflict_lines, start_idx, end_idx
-        )
         try:
-            resolved_lines = extract_resolved_code(merged_lines, before_ctx, after_ctx)
+            (
+                resolved_lines,
+                merged_before_ctx,
+                merged_after_ctx,
+            ) = extract_resolved_code(merged_lines, conflict_lines, start_idx, end_idx)
         except ValueError:
             logger.warning(
-                f"Skipping conflict block {basename}={n} due to missing resolved code."
+                f"Skipping conflict block {basename}-{n} due to missing resolved code."
             )
             continue
+
+        # ------------------
+        # 1) Coherence Check on "before" context (suffix alignment)
+        #    The lines from the conflict file’s before_ctx must match
+        #    the tail of merged_before_ctx (or vice versa) if one is shorter.
+        # ------------------
+        try:
+            check_coherence(before_ctx, merged_before_ctx, alignment="suffix")
+        except ValueError as e:
+            logger.error(f"Before-context mismatch in {basename}-{n}: {e}")
+            raise
+
+        # ------------------
+        # 2) Coherence Check on "after" context (prefix alignment)
+        #    The lines from the conflict file’s after_ctx must match
+        #    the beginning of merged_after_ctx if one is shorter.
+        # ------------------
+        # NOTE: In extract_resolved_code, 'merged_after_ctx' currently
+        # is everything from i2 to the end. You might want to slice it
+        # if you need just the portion that should match after_ctx.
+        try:
+            check_coherence(after_ctx, merged_after_ctx, alignment="prefix")
+        except ValueError as e:
+            logger.error(f"After-context mismatch in {basename}-{n}: {e}")
+            raise
+
+        # Build the final resolved snippet
         resolved_snippet = (
             "".join(before_ctx) + "".join(resolved_lines) + "".join(after_ctx)
         )
 
+        # Minimal consistency check: ensure the actual resolved code is somewhere in merged.
         if "".join(resolved_lines) not in "".join(merged_lines):
             logger.error("Resolved snippet consistency check failed.")
             raise ValueError("Resolved snippet not found in merged file.")
 
+        # Write the conflict snippet and resolved snippet
         conflict_output = output_dir / f"{basename}-{n}.conflict"
         resolved_output = output_dir / f"{basename}-{n}.resolved_conflict"
 
@@ -222,18 +302,18 @@ def main():
     )
     parser.add_argument(
         "--input_dir",
-        default="merges/repos_small/conflict_files",
+        default="merges/repos_50/conflict_files",
         help="Processing directory",
     )
     parser.add_argument(
         "--output_dir",
-        default="merges/repos_small/conflict_blocks",
+        default="merges/repos_50/conflict_blocks",
         help="Output directory for conflict snippets",
     )
     parser.add_argument(
         "--context",
         type=int,
-        default=3,
+        default=5,
         help="Number of context lines to include in the conflict snippet",
     )
     args = parser.parse_args()
