@@ -34,7 +34,12 @@ def java_markdown_reward(completions, **kwargs) -> list[float]:
     This version is 'strong' because it only considers the content within the answer block.
     """
     responses = [completion[0]["content"] for completion in completions]
-    rewards = [1.0 if re.search(JAVA_MARKDOWN_PATTERN, extract_xml_answer(r), re.DOTALL) else 0.0 for r in responses]
+    rewards = [
+        1.0
+        if re.search(JAVA_MARKDOWN_PATTERN, extract_xml_answer(r), re.DOTALL)
+        else 0.0
+        for r in responses
+    ]
     return rewards
 
 
