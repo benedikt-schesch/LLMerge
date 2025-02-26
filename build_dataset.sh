@@ -12,6 +12,10 @@ python3 src/extract_conflict_blocks.py \
     --input_dir $OUT_DIR/conflict_files \
     --output_dir $OUT_DIR/conflict_blocks
 
-python src/metrics_conflict_blocks.py \
+python3 src/metrics_conflict_blocks.py \
     --input_dir $OUT_DIR/conflict_blocks \
     --csv_out $OUT_DIR/conflict_metrics.csv \
+
+python3 src/build_dataset.py \
+    --conflict_blocks_dir $OUT_DIR/conflict_blocks \
+    --output_dir $OUT_DIR/dataset
