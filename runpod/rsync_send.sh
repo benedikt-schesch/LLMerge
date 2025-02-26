@@ -17,7 +17,7 @@ EXCLUDES=(
 
 # Default values
 DEFAULT_SERVER="scheschb@godwit.cs.washington.edu"
-DEFAULT_LOCAL_DIR="/Users/benediktschesch/Git/"
+DEFAULT_LOCAL_DIR="/Users/benediktschesch/Git/LLMerge"
 DEFAULT_REMOTE_DIR="/scratch/scheschb/LLMerge"
 
 # Function to prompt user with default values

@@ -64,17 +64,33 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
     """
     Modified correctness reward function:
     Checks if the expected answer is contained within the answer block.
+    Automatically keeps track of the number of entries in the debug file.
     """
     responses = [completion[0]["content"] for completion in completions]
     q = prompts[0][-1]["content"]
     extracted_responses = [extract_xml_answer(r) for r in responses]
+
     print(
         "-" * 20,
-        f"Question:\n{q}",
-        f"\nAnswer:\n{answer[0]}",
         f"\nResponse:\n{responses[0]}",
-        f"\nExtracted:\n{extracted_responses[0]}",
     )
+    
+    # Count existing entries in the debug file
+    debug_file = "debug.txt"
+    if os.path.exists(debug_file):
+        with open(debug_file, "r", encoding="utf-8") as f:
+            existing_entries = f.read().count("Question:")
+    else:
+        existing_entries = 0
+    
+    entry_number = existing_entries + 1
+
+    # Append to debug file with entry number
+    with open(debug_file, "a", encoding="utf-8") as f:
+        f.write(f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nAnswer:\n{answer[0]}\n\n\n")
+        for idx, r in enumerate(responses):
+            f.write(f"\nResponse {idx}:\n{r}\n\n\n")
+
     # Reward if the expected answer is a substring of the extracted answer block.
     return [2.0 if a in r else 0.0 for r, a in zip(extracted_responses, answer)]
 

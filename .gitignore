@@ -12,6 +12,7 @@ gil_free_env/
 **/dataset
 wandb/
 unsloth_compiled_cache/
+debug.txt
 
 # Compiled class file
 *.class
