@@ -15,8 +15,12 @@ from datasets import Dataset, DatasetDict
 from transformers import AutoTokenizer
 
 from rich.progress import track
+from loguru import logger
 
 from variables import MODEL, MAX_PROMPT_LENGTH
+
+# Configure loguru to log to run.log
+logger.add("run.log")
 
 # Define the system prompt used in conversation formatting.
 SYSTEM_PROMPT = """
@@ -69,7 +73,7 @@ def load_conflict_dataset(  # pylint: disable=too-many-locals
             conflict_file.stem + ".resolved_conflict"
         )
         if not resolved_file.exists():
-            print(
+            logger.info(
                 f"Skipping {conflict_file} because corresponding resolved file not found."
             )
             continue
@@ -80,14 +84,14 @@ def load_conflict_dataset(  # pylint: disable=too-many-locals
         # Count number of lines in conflict query
         num_lines = len(conflict_query.split("\n"))
         if num_lines > max_line_count:
-            print(
+            logger.info(
                 f"Skipping {conflict_file} because it has more than {max_line_count} lines."
             )
             continue
         query = build_query(conflict_query)
         token_length = len(tokenizer(query)["input_ids"])  # type: ignore
         if token_length > MAX_PROMPT_LENGTH:
-            print(
+            logger.info(
                 f"Skipping {conflict_file} because it has more than {MAX_PROMPT_LENGTH} tokens."
             )
             continue
@@ -183,15 +187,15 @@ def main():
         seed=args.seed,
         max_line_count=args.max_line_count,
     )
-    print(f"Train set size: {len(dataset['train'])}")
-    print(f"Test set size: {len(dataset['test'])}")
+    logger.info(f"Train set size: {len(dataset['train'])}")
+    logger.info(f"Test set size: {len(dataset['test'])}")
 
     # Create the output directory if it doesn't exist.
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Save the DatasetDict to disk.
     dataset.save_to_disk(args.output_dir)
-    print(f"Dataset saved to {args.output_dir}")
+    logger.info(f"Dataset saved to {args.output_dir}")
 
 
 if __name__ == "__main__":

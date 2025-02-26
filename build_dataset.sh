@@ -4,6 +4,9 @@
 REPOS_DIR=$1
 OUT_DIR=$2
 
+# Remove the current logs
+rm run.log
+
 python3 src/get_conflict_files.py \
     --repos $REPOS_DIR \
     --output_dir $OUT_DIR
