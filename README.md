@@ -24,7 +24,7 @@ To bypass the GIL use the latest GIL free Python version.
 To install GIL free Python run:
 
 ```bash
-uv venv gil_free_venv --python 3.13t
+uv venv gil_free_venv --python 3.12t
 source gil_free_venv/bin/activate
 uv pip install -r requirements_dataset_building.txt
 ```

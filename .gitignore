@@ -11,6 +11,7 @@ gil_free_env/
 **/conflict_files
 **/dataset
 wandb/
+unsloth_compiled_cache/
 
 # Compiled class file
 *.class

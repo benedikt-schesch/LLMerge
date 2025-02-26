@@ -9,16 +9,20 @@ and formats them as conversation examples.
 import argparse
 import os
 from pathlib import Path
+from typing import Dict, List, Union
 
 from datasets import Dataset, DatasetDict
 
 # Define the system prompt used in conversation formatting.
-SYSTEM_PROMPT = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-    "<think> reasoning process here </think><answer> answer here </answer>"
-)
+SYSTEM_PROMPT = """
+Respond in the following format:
+<reasoning>
+...
+</reasoning>
+<answer>
+...
+</answer>
+"""
 
 QUERY_PROMPT = (
     "You are a semantic merge conflict resolution expert. Below is a snippet of code "
@@ -35,46 +39,9 @@ def build_query(conflict_query):
     return QUERY_PROMPT + "```java\n" + conflict_query + "\n```"
 
 
-# Now that we have split our training dataset, we need to validate our dataset (**Check if user/assistant conversation exist**) before moving to the next step.
-def validate_dataset(dataset):
-    """Perform basic validation checks on the dataset."""
-
-    # Define the required fields for the dataset
-    required_fields = ["problem", "prompt"]
-
-    # Loop through the 'train' and 'test' splits of the dataset
-    for split in ["train", "test"]:
-        print(f"\nValidating {split} split:")
-
-        # Retrieve column names from the dataset
-        fields = dataset[split].column_names
-
-        # Check if any required fields are missing
-        missing = [field for field in required_fields if field not in fields]
-        if missing:
-            print(f"Warning: Missing fields: {missing}")  # Warn if fields are missing
-        else:
-            print("✓ All required fields present")  # Confirm all fields are present
-
-        # Retrieve the first sample from the dataset split
-        sample = dataset[split][0]
-
-        # Extract the 'prompt' field, which contains a list of messages
-        messages = sample["prompt"]
-
-        # Validate the prompt format:
-        # - It should contain at least two messages
-        if (
-            len(messages) >= 2
-            and messages[0]["role"] == "system"
-            and messages[1]["role"] == "user"
-        ):
-            print("✓ Prompt format is correct")  # Confirm correct format
-        else:
-            print("Warning: Incorrect prompt format")  # Warn if format is incorrect
-
-
-def load_conflict_dataset(conflict_blocks_dir: str):
+def load_conflict_dataset(
+    conflict_blocks_dir: str, max_line_count: int = 20
+) -> Dataset:
     """
     Loads a dataset from a folder containing *.conflict and *.resolved_conflict files.
     Each example is a pair:
@@ -100,6 +67,14 @@ def load_conflict_dataset(conflict_blocks_dir: str):
 
         conflict_query = conflict_file.read_text(encoding="utf-8")
         solution_text = resolved_file.read_text(encoding="utf-8")
+
+        # Count number of lines in conflict query
+        num_lines = len(conflict_query.split("\n"))
+        if num_lines > max_line_count:
+            print(
+                f"Skipping {conflict_file} because it has more than {max_line_count} lines."
+            )
+            continue
         query = build_query(conflict_query)
         queries.append(query)
         solutions.append(solution_text)
@@ -109,31 +84,39 @@ def load_conflict_dataset(conflict_blocks_dir: str):
             "No valid conflict/solution pairs were found in the specified directory."
         )
 
-    data = {"problem": queries, "solution": solutions}
+    data = {"question": queries, "answer": solutions}
     dataset = Dataset.from_dict(data)
     return dataset
 
 
-def make_conversation(example):
+def make_conversation(
+    example: Dict[str, str],
+) -> Dict[str, Union[str, List[Dict[str, str]]]]:
     """
     Converts a single dataset example into a conversation format.
     """
     return {
         "prompt": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": example["problem"]},
+            {"role": "user", "content": example["question"]},
         ],
+        "answer": example["answer"],
     }
 
 
 def prepare_train_test_dataset(
-    conflict_blocks_dir: str, test_size: float = 0.1, seed: int = 42
+    conflict_blocks_dir: str,
+    max_line_count: int = 20,
+    test_size: float = 0.1,
+    seed: int = 42,
 ):
     """
     Loads the conflict dataset, splits it into train and test splits,
     and applies the conversation formatting.
     """
-    full_dataset = load_conflict_dataset(conflict_blocks_dir)
+    full_dataset = load_conflict_dataset(
+        conflict_blocks_dir, max_line_count=max_line_count
+    )
     dataset_dict = full_dataset.train_test_split(test_size=test_size, seed=seed)
 
     # Map each split to the conversation format.
@@ -164,6 +147,12 @@ def main():
         "--seed", type=int, default=42, help="Random seed for dataset split."
     )
     parser.add_argument(
+        "--max_line_count",
+        type=int,
+        default=20,
+        help="Maximum number of lines in a conflict block.",
+    )
+    parser.add_argument(
         "--output_dir",
         type=str,
         default="merges/repos_50/dataset",
@@ -174,9 +163,11 @@ def main():
 
     # Generate the dataset with a train/test split.
     dataset = prepare_train_test_dataset(
-        args.conflict_blocks_dir, test_size=args.test_size, seed=args.seed
+        args.conflict_blocks_dir,
+        test_size=args.test_size,
+        seed=args.seed,
+        max_line_count=args.max_line_count,
     )
-    validate_dataset(dataset)
     print(f"Train set size: {len(dataset['train'])}")
     print(f"Test set size: {len(dataset['test'])}")
 
