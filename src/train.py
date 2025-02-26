@@ -74,7 +74,7 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
         "-" * 20,
         f"\nResponse:\n{responses[0]}",
     )
-    
+
     # Count existing entries in the debug file
     debug_file = "debug.txt"
     if os.path.exists(debug_file):
@@ -82,12 +82,14 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
             existing_entries = f.read().count("Question:")
     else:
         existing_entries = 0
-    
+
     entry_number = existing_entries + 1
 
     # Append to debug file with entry number
     with open(debug_file, "a", encoding="utf-8") as f:
-        f.write(f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nAnswer:\n{answer[0]}\n\n\n")
+        f.write(
+            f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nAnswer:\n{answer[0]}\n\n\n"
+        )
         for idx, r in enumerate(responses):
             f.write(f"\nResponse {idx}:\n{r}\n\n\n")
 
