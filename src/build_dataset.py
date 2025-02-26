@@ -25,9 +25,9 @@ logger.add("run.log")
 # Define the system prompt used in conversation formatting.
 SYSTEM_PROMPT = """
 Respond in the following format:
-<reasoning>
+<think>
 ...
-</reasoning>
+</think>
 <answer>
 ...
 </answer>
