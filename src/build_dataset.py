@@ -85,7 +85,7 @@ def load_conflict_dataset(  # pylint: disable=too-many-locals
             )
             continue
         query = build_query(conflict_query)
-        token_length = len(tokenizer(query)["input_ids"])
+        token_length = len(tokenizer(query)["input_ids"])  # type: ignore
         if token_length > MAX_PROMPT_LENGTH:
             print(
                 f"Skipping {conflict_file} because it has more than {MAX_PROMPT_LENGTH} tokens."
