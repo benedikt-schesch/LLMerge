@@ -11,6 +11,7 @@ gil_free_env/
 **/conflict_files
 **/filtered_dataset
 **/dataset
+outputs/
 wandb/
 unsloth_compiled_cache/
 debug.txt
