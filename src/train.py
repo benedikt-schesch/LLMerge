@@ -7,7 +7,7 @@ import re
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
-from variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH
+from variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH, SYSTEM_PROMPT
 
 os.environ["WANDB_PROJECT"] = "LLMerge"
 
@@ -86,7 +86,7 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
 if __name__ == "__main__":
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL,
-        max_seq_length=MAX_SEQ_LENGTH,
+        max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
