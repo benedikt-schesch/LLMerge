@@ -11,9 +11,6 @@ from variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH
 
 PatchFastRL("GRPO", FastLanguageModel)
 
-os.environ["WANDB_PROJECT"] = "LLMerge"
-
-
 dataset = load_from_disk("merges/repos_50/dataset")
 
 
