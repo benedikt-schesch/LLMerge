@@ -7,9 +7,10 @@ gil_free_env/
 **.lock
 .workdir/
 **/file_conflicts
+**/merges
 **/conflict_blocks
 **/conflict_files
-**/filtered_dataset
+**/filtered_merges
 **/dataset
 outputs/
 wandb/

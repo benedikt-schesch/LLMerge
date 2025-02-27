@@ -37,12 +37,11 @@ from typing import List, Optional, Tuple
 import shutil
 import pandas as pd
 from transformers import AutoTokenizer
-
-# Import the same constants used by your other script
+from loguru import logger
+from build_dataset import build_query
 from variables import MODEL, MAX_PROMPT_LENGTH
 
-# build_query is used to prepare the text for token counting
-from build_dataset import build_query
+logger.add("run.log")
 
 
 def get_token_count(tokenizer, conflict_query: List[str]) -> int:
@@ -101,7 +100,7 @@ def split_conflict_block(
       [optional base marker: "|||||||", followed by base lines]
       =======
       (right parent lines)
-      >>>>>>>
+      >>>>>>>>
 
     If a base marker is not found, base is returned as None.
     """
@@ -187,13 +186,13 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
 
     input_dir = Path(args.input_dir)
     if not input_dir.is_dir():
-        sys.stderr.write(f"ERROR: input_dir '{input_dir}' is not a directory.\n")
+        logger.error(f"ERROR: input_dir '{input_dir}' is not a directory.")
         sys.exit(1)
 
     # Collect all *.conflict files; we'll match each with a corresponding *.resolved_conflict
     conflict_files = sorted(input_dir.glob("*.conflict"))
     if not conflict_files:
-        print("No '.conflict' files found.")
+        logger.info("No '.conflict' files found.")
         sys.exit(0)
 
     # Create output directory if needed
@@ -208,7 +207,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
         # For each .conflict, find the corresponding .resolved_conflict file
         resolved_path = conflict_path.with_suffix(".resolved_conflict")
         if not resolved_path.exists():
-            print(f"No matching .resolved_conflict for {conflict_path}. Skipped.")
+            logger.info(f"No matching .resolved_conflict for {conflict_path}. Skipped.")
             continue
 
         # Use the filename (minus extension) as the conflict identifier
@@ -224,7 +223,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
                 conflict_lines
             )
         except ValueError as e:
-            print(f"{e} in {conflict_path}. Skipped.")
+            logger.info(f"{e} in {conflict_path}. Skipped.")
             continue
 
         # Further split the conflict block into left_parent, right_parent, and base (if available)
@@ -275,7 +274,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
         # Prepare row data
         row_data = {"conflict_id": identifier}
         row_data.update(metrics)  # type: ignore
-        row_data["selected"] = selected
+        row_data["selected"] = selected  # type: ignore
         rows.append(row_data)
 
         # If selected and an output folder was provided, copy the files
@@ -289,11 +288,11 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
     df = pd.DataFrame(rows)
     df.to_csv(args.csv_out, index=False, encoding="utf-8")
 
-    print(f"Metrics (with 'selected' column) have been written to {args.csv_out}")
+    logger.info(f"Metrics (with 'selected' column) have been written to {args.csv_out}")
     if args.filtered_output_dir:
-        print(f"Selected conflicts copied to {args.filtered_output_dir}")
+        logger.info(f"Selected conflicts copied to {args.filtered_output_dir}")
     else:
-        print("No output directory specified; nothing copied.")
+        logger.info("No output directory specified; nothing copied.")
 
 
 if __name__ == "__main__":

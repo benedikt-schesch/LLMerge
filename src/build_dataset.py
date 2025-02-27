@@ -70,7 +70,7 @@ def main():
         "--conflict_blocks_dir", type=str, default="merges/repos_50/conflict_blocks"
     )
     parser.add_argument(
-        "--output_dir", type=str, default="merges/repos_50/filtered_dataset"
+        "--output_dir", type=str, default="merges/repos_50/filtered_merges"
     )
     parser.add_argument("--test_size", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=42)

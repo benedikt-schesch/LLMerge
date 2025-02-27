@@ -18,9 +18,9 @@ python3 src/extract_conflict_blocks.py \
 
 python3 src/metrics_conflict_blocks.py \
     --input_dir "$OUT_DIR/conflict_blocks" \
-    --filtered_output_dir "$OUT_DIR/filtered_dataset" \
+    --filtered_output_dir "$OUT_DIR/filtered_merges" \
     --csv_out "$OUT_DIR/conflict_metrics.csv" $KEEP_FLAG
 
 python3 src/build_dataset.py \
-    --conflict_blocks_dir "$OUT_DIR/filtered_dataset" \
+    --conflict_blocks_dir "$OUT_DIR/filtered_merges" \
     --output_dir "$OUT_DIR/dataset"
