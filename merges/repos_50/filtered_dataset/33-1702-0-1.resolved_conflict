@@ -1,0 +1,12 @@
+    Logger.getLogger(InfiniteRetryPubSub.class.getName()).addHandler(logHandler);
+  }
+
+  @After
+  public void afterTest() {
+    System.out.flush();
+    logHandler.clear();
+  }
+
+  @Test
+  public void helloWorldTest() throws IOException {
+    new HelloWorld().service(request, response);

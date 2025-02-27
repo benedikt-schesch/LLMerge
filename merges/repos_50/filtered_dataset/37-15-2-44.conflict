@@ -1,0 +1,15 @@
+			do {
+				switch (_alt) {
+				case 1:
+					{
+					{
+<<<<<<< HEAD
+					setState(142);
+=======
+						setState(147);
+>>>>>>> f44f18dc6add4dd14d057e6ad80aa05159acf3f9
+					relativePath();
+					}
+					}
+					break;
+				default:

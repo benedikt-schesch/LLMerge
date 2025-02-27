@@ -1,0 +1,14 @@
+	SearchView searchView;
+
+	MenuBehaviour menuBehaviour;
+
+	private Set<String> recordingSet;
+	private Set<String> speakerSet;
+
+	private RecordingArrayAdapter adapter;
+
+	/////////////////////////////////////////////////////
+	////                                   			/////
+	//// Things pertaining to getting Google token. /////
+	////                                   			/////
+	/////////////////////////////////////////////////////

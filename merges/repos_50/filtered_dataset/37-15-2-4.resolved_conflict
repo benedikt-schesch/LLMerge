@@ -1,0 +1,11 @@
+
+	public final RelativePathContext relativePath() throws RecognitionException {
+		RelativePathContext _localctx = new RelativePathContext(_ctx, getState());
+		enterRule(_localctx, 2, RULE_relativePath);
+		try {
+			setState(62);
+			_errHandler.sync(this);
+			switch ( getInterpreter().adaptivePredict(_input,1,_ctx) ) {
+			case 1:
+				enterOuterAlt(_localctx, 1);
+				{

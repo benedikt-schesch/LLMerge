@@ -1,0 +1,11 @@
+		AnyIndexContext _localctx = new AnyIndexContext(_ctx, getState());
+		enterRule(_localctx, 10, RULE_anyIndex);
+		try {
+			enterOuterAlt(_localctx, 1);
+			{
+			setState(71);
+			match(T__3);
+			}
+		}
+		catch (RecognitionException re) {
+			_localctx.exception = re;

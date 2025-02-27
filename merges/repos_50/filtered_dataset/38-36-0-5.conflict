@@ -1,0 +1,16 @@
+     * <p>
+     * Example:
+     * myColumn.set(4.0, myColumn.valueIsMissing()); // no more missing values
+     */
+    @Override
+<<<<<<< HEAD
+    public DoubleColumn set(Selection rowSelection, double newValue) {
+        for (int row : rowSelection) {
+=======
+    public void set(final Selection rowSelection, final double newValue) {
+        for (final int row : rowSelection) {
+>>>>>>> 6d28266a122a38df7acdddba3cb08642e730dfea
+            set(row, newValue);
+        }
+        return this;
+    }

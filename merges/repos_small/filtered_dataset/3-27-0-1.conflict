@@ -1,0 +1,18 @@
+
+package jscover.server;
+
+import jscover.ConfigurationCommon;
+import jscover.Main;
+<<<<<<< HEAD
+import jscover.util.IoUtils;
+
+import org.mozilla.javascript.CompilerEnvirons;
+import org.mozilla.javascript.Context;
+=======
+import jscover.util.PatternMatcherString;
+>>>>>>> 2e483d3cd3abbb5b6af28ea519278f597ccded96
+
+import java.io.File;
+import java.util.logging.Level;
+
+import static java.lang.String.format;

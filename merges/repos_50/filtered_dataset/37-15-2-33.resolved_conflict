@@ -1,0 +1,11 @@
+				filterEqualNum();
+				}
+				break;
+			case 3:
+				{
+				setState(125);
+				filterEqualStr();
+				}
+				break;
+			case 4:
+				{

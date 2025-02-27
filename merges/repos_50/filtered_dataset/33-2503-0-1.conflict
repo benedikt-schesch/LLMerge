@@ -1,0 +1,15 @@
+    safeDeleteJob(SECRET_MANAGER_JOB);
+    safeDeleteJob(GPU_JOB);
+    safeDeleteJob(LOCAL_SSD_JOB);
+    safeDeleteJob(PERSISTENT_DISK_JOB);
+    safeDeleteJob(NOTIFICATION_NAME);
+<<<<<<< HEAD
+    safeDeleteJob(BATCH_RUNNABLE_LABEL);
+=======
+    safeDeleteJob(NFS_JOB_NAME);
+>>>>>>> d9f6c15cfde3d39d2b45cd3ec124ecd8b6e51e23
+  }
+
+  private static void safeDeleteJob(String jobName) {
+    try {
+      DeleteJob.deleteJob(PROJECT_ID, REGION, jobName);

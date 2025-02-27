@@ -6,7 +6,10 @@ CreateConflictMetrics.py
 Usage:
     python CreateConflictMetrics.py \
         --input_dir /path/to/output_folder \
-        --csv_out /path/to/output_metrics.csv
+        --csv_out /path/to/output_metrics.csv \
+        --max_line_count 20 \
+        --keep_trivial_resolution \
+        --selected_out_dir /path/to/selected_conflicts
 
 What does this script do?
   - Finds *.conflict and *.resolved_conflict files in `--input_dir` (pairs).
@@ -21,22 +24,29 @@ What does this script do?
            - base (lines after a base marker “|||||||” until =======, if present),
            - right_parent (lines after ======= until >>>>>>>).
       4) Reads the resolved snippet (the entire file).
-      5) Computes metrics (in lines) for each portion.
-      6) Writes all metrics to a CSV file using pandas.
+      5) Computes metrics (in lines) for each portion, plus token count of the full conflict.
+      6) (New) Filters out conflicts based on conditions like trivial resolution, max lines, etc.
+      7) (New) Copies selected conflict/resolution files to `--selected_out_dir`, if specified.
+      8) Writes all metrics (with `selected` column) to a CSV file using pandas.
 """
 
 import argparse
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
+import shutil
 import pandas as pd
 from transformers import AutoTokenizer
-from variables import MODEL
+
+# Import the same constants used by your other script
+from variables import MODEL, MAX_PROMPT_LENGTH
+
+# build_query is used to prepare the text for token counting
 from build_dataset import build_query
 
 
 def get_token_count(tokenizer, conflict_query: List[str]) -> int:
-    """Returns the token count of the conflict query"""
+    """Returns the token count of the conflict query (entire .conflict file)."""
     query = build_query("\n".join(conflict_query))
     return len(tokenizer(query)["input_ids"])
 
@@ -137,11 +147,12 @@ def is_sublist(sub: List[str], parent: List[str]) -> bool:
     return False
 
 
-def main():  # pylint: disable=too-many-locals
+def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
     """Main entry point"""
     parser = argparse.ArgumentParser(
         description="Compute metrics for each conflict snippet "
-        "(context, conflict, resolution, and parent versions)."
+        "(context, conflict, resolution, and parent versions), "
+        "and optionally filter/copy selected conflicts."
     )
     parser.add_argument(
         "--input_dir",
@@ -153,6 +164,24 @@ def main():  # pylint: disable=too-many-locals
         "--csv_out",
         default="merges/repos_small/conflict_metrics.csv",
         help="Path to the output CSV file.",
+    )
+    parser.add_argument(
+        "--max_line_count",
+        type=int,
+        default=20,
+        help="Maximum number of lines allowed in the entire .conflict file. "
+        "Conflicts exceeding this will be marked not filtered.",
+    )
+    parser.add_argument(
+        "--filtered_output_dir",
+        type=str,
+        default="merges/repos_small/filtered_conflicts",
+        help="If specified, copy filtered .conflict/.resolved_conflict pairs to this directory.",
+    )
+    parser.add_argument(
+        "-keep_trivial_resolution",
+        action="store_true",
+        help="Filter out conflict blocks with trivial resolutions.",
     )
     args = parser.parse_args()
 
@@ -166,6 +195,10 @@ def main():  # pylint: disable=too-many-locals
     if not conflict_files:
         print("No '.conflict' files found.")
         sys.exit(0)
+
+    # Create output directory if needed
+    if args.filtered_output_dir:
+        Path(args.filtered_output_dir).mkdir(parents=True, exist_ok=True)
 
     # Prepare a list for metric rows
     rows = []
@@ -199,7 +232,6 @@ def main():  # pylint: disable=too-many-locals
 
         # Derive the resolved conflict block by removing the context portions
         # from the resolved file.
-        # (This assumes the resolution maintains the context length.)
         if len(after_ctx) < 1:
             resolution = resolved_lines[len(before_ctx) :]
         else:
@@ -209,7 +241,7 @@ def main():  # pylint: disable=too-many-locals
         res_in_left = is_sublist(resolution, left_parent)
         res_in_right = is_sublist(resolution, right_parent)
 
-        # Compute all metrics using the standard interface, including the new metric.
+        # Compute all metrics
         metrics = {
             "full_conflict_lines": len(conflict_lines),
             "context_before_lines": len(before_ctx),
@@ -220,19 +252,48 @@ def main():  # pylint: disable=too-many-locals
             "parent2_lines": len(right_parent),
             "base_lines": len(base) if base is not None else -1,
             "num_tokens_query": get_token_count(tokenizer, conflict_lines),
-            "resolution_in_left_or_right": res_in_left or res_in_right,
+            "resolution_in_left_or_right": (res_in_left or res_in_right),
         }
+
+        # Decide if this conflict should be selected based on filtering rules
+        selected = True
+
+        # If we do NOT keep trivial resolutions, skip merges that are fully in left or right
+        if (not args.keep_trivial_resolution) and metrics[
+            "resolution_in_left_or_right"
+        ]:
+            selected = False
+
+        # Skip if the entire conflict file exceeds max_line_count
+        if metrics["full_conflict_lines"] > args.max_line_count:
+            selected = False
+
+        # Skip if token count exceeds the model prompt limit
+        if metrics["num_tokens_query"] > MAX_PROMPT_LENGTH:
+            selected = False
 
         # Prepare row data
         row_data = {"conflict_id": identifier}
         row_data.update(metrics)  # type: ignore
+        row_data["selected"] = selected
         rows.append(row_data)
+
+        # If selected and an output folder was provided, copy the files
+        if selected and args.filtered_output_dir:
+            out_conflict = Path(args.filtered_output_dir) / conflict_path.name
+            out_resolved = Path(args.filtered_output_dir) / resolved_path.name
+            shutil.copy2(conflict_path, out_conflict)
+            shutil.copy2(resolved_path, out_resolved)
 
     # Create a pandas DataFrame from the list of rows and write it to CSV
     df = pd.DataFrame(rows)
     df.to_csv(args.csv_out, index=False, encoding="utf-8")
 
-    print(f"Metrics have been written to {args.csv_out}")
+    print(f"Metrics (with 'selected' column) have been written to {args.csv_out}")
+    if args.filtered_output_dir:
+        print(f"Selected conflicts copied to {args.filtered_output_dir}")
+    else:
+        print("No output directory specified; nothing copied.")
 
 
 if __name__ == "__main__":

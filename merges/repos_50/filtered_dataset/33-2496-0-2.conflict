@@ -1,0 +1,15 @@
+    safeDeleteJob(LOCAL_SSD_JOB);
+    safeDeleteJob(PERSISTENT_DISK_JOB);
+    safeDeleteJob(NOTIFICATION_NAME);
+    safeDeleteJob(NFS_JOB_NAME);
+    safeDeleteJob(BATCH_LABEL_JOB);
+<<<<<<< HEAD
+    safeDeleteJob(JOB_ALLOCATION_POLICY_LABEL);
+=======
+    safeDeleteJob(CUSTOM_NETWORK_NAME);
+>>>>>>> 56fcb168efcb888f578ba796190aa453731de6c8
+  }
+
+  private static void safeDeleteJob(String jobName) {
+    try {
+      DeleteJob.deleteJob(PROJECT_ID, REGION, jobName);

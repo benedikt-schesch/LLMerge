@@ -1,0 +1,15 @@
+    safeDeleteJob(NOTIFICATION_NAME);
+    safeDeleteJob(CUSTOM_EVENT_NAME);
+    safeDeleteJob(NFS_JOB_NAME);
+    safeDeleteJob(BATCH_LABEL_JOB);
+    safeDeleteJob(CUSTOM_NETWORK_NAME);
+<<<<<<< HEAD
+    safeDeleteJob(BATCH_RUNNABLE_LABEL);
+=======
+    safeDeleteJob(JOB_ALLOCATION_POLICY_LABEL);
+>>>>>>> 7d5ad9b148d1a334096e4fd672d4ff205f97bde0
+  }
+
+  private static void safeDeleteJob(String jobName) {
+    try {
+      DeleteJob.deleteJob(PROJECT_ID, REGION, jobName);

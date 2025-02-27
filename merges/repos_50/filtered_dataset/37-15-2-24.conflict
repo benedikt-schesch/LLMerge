@@ -1,0 +1,15 @@
+>>>>>>> f44f18dc6add4dd14d057e6ad80aa05159acf3f9
+			_errHandler.sync(this);
+			_la = _input.LA(1);
+			if (_la==NUM) {
+				{
+<<<<<<< HEAD
+				setState(93);
+=======
+					setState(97);
+>>>>>>> f44f18dc6add4dd14d057e6ad80aa05159acf3f9
+				match(NUM);
+				}
+			}
+
+<<<<<<< HEAD

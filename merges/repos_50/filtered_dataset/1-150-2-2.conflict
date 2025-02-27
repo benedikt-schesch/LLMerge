@@ -1,0 +1,18 @@
+		if(twoPane) {
+
+			commentListingController
+					= new CommentListingController(
+					PostCommentListingURL.forPostId(post.src
+<<<<<<< HEAD
+							.getIdAlone()),
+					this);
+//			showBackButton(true);
+=======
+							.getIdAlone()));
+			showBackButton(true);
+>>>>>>> e3bc334bae854fa5b5e17aec3cd3fbff93f595bd
+
+			if(isMenuShown) {
+
+				commentListingFragment = commentListingController.get(this, false, null);
+				commentListingView = commentListingFragment.createCombinedListingAndOverlayView();

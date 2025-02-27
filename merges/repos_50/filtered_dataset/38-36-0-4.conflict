@@ -1,0 +1,15 @@
+    public double get(final int index) {
+        return data.getDouble(index);
+    }
+
+    @Override
+<<<<<<< HEAD
+    public DoubleColumn set(int r, double value) {
+=======
+    public void set(final int r, final double value) {
+>>>>>>> 6d28266a122a38df7acdddba3cb08642e730dfea
+        data.set(r, value);
+        return this;
+    }
+
+    /**

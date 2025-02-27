@@ -1,0 +1,13 @@
+	}
+
+	@Override
+	public void onStop() {
+		super.onStop();
+
+		if(player != null) {
+			player.release();
+		}
+	}
+
+	// Prepares the original recording
+	private void setUpRecording() {

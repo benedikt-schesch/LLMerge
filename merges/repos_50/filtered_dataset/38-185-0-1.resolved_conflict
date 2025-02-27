@@ -1,0 +1,12 @@
+ * null a default layout is provided.
+ */
+public class Figure {
+
+  private final Trace[] data;
+  private Layout layout;
+  private final Config config;
+  private final EventHandler[] eventHandlers;
+
+  private final Map<String, Object> context = new HashMap<>();
+
+  private final PebbleEngine engine = TemplateUtils.getNewEngine();

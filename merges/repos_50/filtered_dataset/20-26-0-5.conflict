@@ -1,0 +1,16 @@
+				return;
+		}
+
+		Intent intent = new Intent(this, ListenActivity.class);
+		intent.putExtra("id", recording.getId());
+<<<<<<< HEAD
+=======
+		intent.putExtra("ownerId", recording.getOwnerId());
+		intent.putExtra("versionName", recording.getVersionName());
+		intent.putExtra("token", googleAuthToken);
+>>>>>>> be1c3a478e385acf8bcfe1ffffee82d991ae5756
+		startActivity(intent);
+	}
+
+	// If current year < 2000, make the user type in the correct date continuously
+	private void checkDate() {

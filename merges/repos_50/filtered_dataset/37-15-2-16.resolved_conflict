@@ -1,0 +1,11 @@
+		SearchContext _localctx = new SearchContext(_ctx, getState());
+		enterRule(_localctx, 6, RULE_search);
+		try {
+			enterOuterAlt(_localctx, 1);
+			{
+			setState(67);
+			match(T__1);
+			}
+		}
+		catch (RecognitionException re) {
+			_localctx.exception = re;
