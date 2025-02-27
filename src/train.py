@@ -9,6 +9,8 @@ from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
 from variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH
 
+os.environ["WANDB_PROJECT"] = "LLMerge"
+
 PatchFastRL("GRPO", FastLanguageModel)
 
 dataset = load_from_disk("merges/repos_50/dataset")
@@ -22,7 +24,7 @@ def extract_answer(text: str) -> str:
 
 def format_reward(completions, **kwargs) -> list[float]:
     """Reward function that checks if the completion has a specific format."""
-    pattern = r"^.*?\n</think>\n.*?$"
+    pattern = r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
