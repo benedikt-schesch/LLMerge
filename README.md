@@ -49,5 +49,5 @@ PYTHON_GIL=0 ./build_dataset_small.sh
 
 ```mermaid
 graph TD
-    get_conflict_files.py["extract_conflict_files.py<br/><span style='font-size:12px;'>Among all the merges extract all the conflicting files and their resolution</span>"] --> extract_conflict_blocks.py["extract_conflict_blocks.py<br/><span style='font-size:12px;'>Among all the conflicting files extract each conflict marker with necessary context and the resolution of each separately</span>"] --> metrics_conflict_blocks.py["metrics_conflict_blocks.py<br/><span style='font-size:12px;'>Computes different metrics for the dataset analysis and filtering</span>"]
+    get_conflict_files.py["get_conflict_files.py<br/><span style='font-size:12px;'>Among all the merges extract all the conflicting files and their resolution</span>"] --> extract_conflict_blocks.py["extract_conflict_blocks.py<br/><span style='font-size:12px;'>Among all the conflicting files extract each conflict marker with necessary context and the resolution of each separately</span>"] --> metrics_conflict_blocks.py["metrics_conflict_blocks.py<br/><span style='font-size:12px;'>Computes different metrics for the dataset analysis and filtering</span>"]
 ```

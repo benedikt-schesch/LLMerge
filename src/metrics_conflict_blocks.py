@@ -29,8 +29,16 @@ import argparse
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
-
 import pandas as pd
+from transformers import AutoTokenizer
+from variables import MODEL
+from build_dataset import build_query
+
+
+def get_token_count(tokenizer, conflict_query: List[str]) -> int:
+    """Returns the token count of the conflict query"""
+    query = build_query("\n".join(conflict_query))
+    return len(tokenizer(query)["input_ids"])
 
 
 def split_single_conflict_snippet(
@@ -116,6 +124,19 @@ def split_conflict_block(
     return left_parent, right_parent, None if not encountered_base_marker else base
 
 
+def is_sublist(sub: List[str], parent: List[str]) -> bool:
+    """
+    Checks if the list 'sub' is a contiguous sublist of 'parent'.
+    Returns True if it is, otherwise False.
+    """
+    if not sub:
+        return True
+    for i in range(len(parent) - len(sub) + 1):
+        if parent[i : i + len(sub)] == sub:
+            return True
+    return False
+
+
 def main():  # pylint: disable=too-many-locals
     """Main entry point"""
     parser = argparse.ArgumentParser(
@@ -148,6 +169,7 @@ def main():  # pylint: disable=too-many-locals
 
     # Prepare a list for metric rows
     rows = []
+    tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
 
     for conflict_path in conflict_files:
         # For each .conflict, find the corresponding .resolved_conflict file
@@ -175,24 +197,30 @@ def main():  # pylint: disable=too-many-locals
         # Further split the conflict block into left_parent, right_parent, and base (if available)
         left_parent, right_parent, base = split_conflict_block(conflict_block)
 
-        # Derive the resolved conflict block by removing the context
-        #  portions from the resolved file.
+        # Derive the resolved conflict block by removing the context portions
+        # from the resolved file.
         # (This assumes the resolution maintains the context length.)
         if len(after_ctx) < 1:
             resolution = resolved_lines[len(before_ctx) :]
         else:
             resolution = resolved_lines[len(before_ctx) : -len(after_ctx)]
 
-        # Compute all metrics using the standard interface
+        # Check if the resolution is fully contained in either left_parent or right_parent.
+        res_in_left = is_sublist(resolution, left_parent)
+        res_in_right = is_sublist(resolution, right_parent)
+
+        # Compute all metrics using the standard interface, including the new metric.
         metrics = {
-            "full_conflict_size": len(conflict_lines),
-            "context_before_size": len(before_ctx),
-            "conflict_size": len(conflict_block),
-            "context_after_size": len(after_ctx),
-            "resolution_size": len(resolution),
-            "parent1_size": len(left_parent),
-            "parent2_size": len(right_parent),
-            "base_size": len(base) if base is not None else -1,
+            "full_conflict_lines": len(conflict_lines),
+            "context_before_lines": len(before_ctx),
+            "conflict_lines": len(conflict_block),
+            "context_after_lines": len(after_ctx),
+            "resolution_lines": len(resolution),
+            "parent1_lines": len(left_parent),
+            "parent2_lines": len(right_parent),
+            "base_lines": len(base) if base is not None else -1,
+            "num_tokens_query": get_token_count(tokenizer, conflict_lines),
+            "resolution_in_left_or_right": res_in_left or res_in_right,
         }
 
         # Prepare row data

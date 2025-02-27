@@ -10,34 +10,17 @@ import argparse
 import os
 from pathlib import Path
 from typing import Dict, List, Union
+import pandas as pd
 
 from datasets import Dataset, DatasetDict
-from transformers import AutoTokenizer
 
 from rich.progress import track
 from loguru import logger
 
-from variables import MODEL, MAX_PROMPT_LENGTH
+from variables import MAX_PROMPT_LENGTH, SYSTEM_PROMPT, QUERY_PROMPT
 
 # Configure loguru to log to run.log
 logger.add("run.log")
-
-# Define the system prompt used in conversation formatting.
-SYSTEM_PROMPT = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-    "<think> reasoning process here </think><answer> answer here </answer>"
-)
-
-QUERY_PROMPT = (
-    "You are a semantic merge conflict resolution expert. Below is a snippet of code "
-    "with surrounding context that includes a merge conflict.\n"
-    "Return the entire snippet (including full context) in markdown code fences as provided, make sure you do not modify the context at all and preserve the spacing as is.\n"
-    "Think in terms of intent and semantics that both sides of the merge are trying to achieve.\n"
-    "If you are not sure on how to resolve the conflict or if the intent is ambiguous, please return the same snippet with the conflict.\n"
-    "Here is the code snippet:\n"
-)
 
 
 def build_query(conflict_query):
@@ -46,7 +29,10 @@ def build_query(conflict_query):
 
 
 def load_conflict_dataset(  # pylint: disable=too-many-locals
-    conflict_blocks_dir: str, max_line_count: int = 20
+    conflict_blocks_dir: str,
+    metrics: pd.DataFrame,
+    max_line_count: int = 20,
+    keep_trivial_resolution: bool = True,
 ) -> Dataset:
     """
     Loads a dataset from a folder containing *.conflict and *.resolved_conflict files.
@@ -60,15 +46,23 @@ def load_conflict_dataset(  # pylint: disable=too-many-locals
     queries = []
     solutions = []
 
-    tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
-
     for conflict_file in track(
         conflict_files, description="Processing conflict files..."
     ):  # Wrapped in progress bar
         # The corresponding resolved file should have the same stem with .resolved_conflict extension.
-        resolved_file = conflict_file.with_name(
-            conflict_file.stem + ".resolved_conflict"
-        )
+        conflict_id = conflict_file.stem
+        assert len(metrics[metrics["conflict_id"] == conflict_id]) == 1
+        conflict_metrics = metrics[metrics["conflict_id"] == conflict_id].iloc[0]
+
+        if (not keep_trivial_resolution) and conflict_metrics[
+            "resolution_in_left_or_right"
+        ]:
+            logger.info(
+                f"Skipping {conflict_file} because it has resolution in left or right."
+            )
+            continue
+
+        resolved_file = conflict_file.with_name(conflict_id + ".resolved_conflict")
         if not resolved_file.exists():
             logger.info(
                 f"Skipping {conflict_file} because corresponding resolved file not found."
@@ -86,8 +80,7 @@ def load_conflict_dataset(  # pylint: disable=too-many-locals
             )
             continue
         query = build_query(conflict_query)
-        token_length = len(tokenizer(query)["input_ids"])  # type: ignore
-        if token_length > MAX_PROMPT_LENGTH:
+        if MAX_PROMPT_LENGTH < conflict_metrics["num_tokens_query"]:
             logger.info(
                 f"Skipping {conflict_file} because it has more than {MAX_PROMPT_LENGTH} tokens."
             )
@@ -120,10 +113,12 @@ def make_conversation(
     }
 
 
-def prepare_train_test_dataset(
+def prepare_train_test_dataset(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     conflict_blocks_dir: str,
+    metrics: pd.DataFrame,
     max_line_count: int = 20,
     test_size: float = 0.1,
+    keep_trivial_resolution: bool = True,
     seed: int = 42,
 ):
     """
@@ -131,7 +126,10 @@ def prepare_train_test_dataset(
     and applies the conversation formatting.
     """
     full_dataset = load_conflict_dataset(
-        conflict_blocks_dir, max_line_count=max_line_count
+        conflict_blocks_dir,
+        max_line_count=max_line_count,
+        metrics=metrics,
+        keep_trivial_resolution=keep_trivial_resolution,
     )
     dataset_dict = full_dataset.train_test_split(test_size=test_size, seed=seed)
 
@@ -154,6 +152,12 @@ def main():
         help="Directory containing conflict blocks.",
     )
     parser.add_argument(
+        "--metrics",
+        type=str,
+        default="merges/repos_50/conflict_metrics.csv",
+        help="Directory to save the computed metrics.",
+    )
+    parser.add_argument(
         "--test_size",
         type=float,
         default=0.2,
@@ -169,6 +173,11 @@ def main():
         help="Maximum number of lines in a conflict block.",
     )
     parser.add_argument(
+        "-keep_trivial_resolution",
+        action="store_true",
+        help="Filter out conflict blocks with trivial resolutions.",
+    )
+    parser.add_argument(
         "--output_dir",
         type=str,
         default="merges/repos_50/dataset",
@@ -177,11 +186,15 @@ def main():
 
     args = parser.parse_args()
 
+    df_metrics = pd.read_csv(args.metrics)
+
     # Generate the dataset with a train/test split.
     dataset = prepare_train_test_dataset(
         args.conflict_blocks_dir,
+        metrics=df_metrics,
         test_size=args.test_size,
         seed=args.seed,
+        keep_trivial_resolution=args.keep_trivial_resolution,
         max_line_count=args.max_line_count,
     )
     logger.info(f"Train set size: {len(dataset['train'])}")

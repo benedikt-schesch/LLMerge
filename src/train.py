@@ -18,14 +18,20 @@ dataset = load_from_disk("merges/repos_50/dataset")
 
 
 # Load and prep dataset
-def extract_xml_answer(text: str) -> str:
-    """Extracts the answer block from the XML-formatted response."""
-    answer = text.split("<answer>")[-1]
-    answer = answer.split("</answer>")[0]
-    return answer.strip()
+def extract_answer(text: str) -> str:
+    """Extracts the answer block from the new formatted response."""
+    return text.split("</think>")[-1]
 
 
-JAVA_MARKDOWN_PATTERN = r"```java\s*\n.*?```"
+def format_reward(completions, **kwargs) -> list[float]:
+    """Reward function that checks if the completion has a specific format."""
+    pattern = r"^.*?\n</think>\n.*?$"
+    responses = [completion[0]["content"] for completion in completions]
+    matches = [re.match(pattern, r) for r in responses]
+    return [0.5 if match else 0.0 for match in matches]
+
+
+JAVA_MARKDOWN_PATTERN = r"```java\n.*?```"
 
 
 def java_markdown_reward(completions, **kwargs) -> list[float]:
@@ -35,9 +41,7 @@ def java_markdown_reward(completions, **kwargs) -> list[float]:
     """
     responses = [completion[0]["content"] for completion in completions]
     rewards = [
-        1.0
-        if re.search(JAVA_MARKDOWN_PATTERN, extract_xml_answer(r), re.DOTALL)
-        else 0.0
+        1.0 if re.search(JAVA_MARKDOWN_PATTERN, extract_answer(r), re.DOTALL) else 0.0
         for r in responses
     ]
     return rewards
@@ -51,7 +55,7 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
     """
     responses = [completion[0]["content"] for completion in completions]
     q = prompts[0][-1]["content"]
-    extracted_responses = [extract_xml_answer(r) for r in responses]
+    extracted_responses = [extract_answer(r) for r in responses]
 
     print(
         "-" * 20,
@@ -80,14 +84,6 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
     return [2.0 if a in r else 0.0 for r, a in zip(extracted_responses, answer)]
 
 
-def format_reward(completions, **kwargs) -> list[float]:
-    """Reward function that checks if the completion has a specific format."""
-    pattern = r"^.*?\n</think>\n<answer>\n.*?\n</answer>$"
-    responses = [completion[0]["content"] for completion in completions]
-    matches = [re.match(pattern, r) for r in responses]
-    return [0.5 if match else 0.0 for match in matches]
-
-
 if __name__ == "__main__":
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL,
@@ -111,7 +107,7 @@ if __name__ == "__main__":
             "down_proj",
         ],  # Remove QKVO if out of memory
         lora_alpha=LORA_RANK,
-        use_gradient_checkpointing="unsloth",  # Enable long context finetuning
+        use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
         random_state=3407,
     )
 
@@ -129,10 +125,10 @@ if __name__ == "__main__":
         fp16=not is_bfloat16_supported(),
         per_device_train_batch_size=1,
         gradient_accumulation_steps=1,  # Increase to 4 for smoother training
-        num_generations=16,  # Decrease if out of memory
+        num_generations=8,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_SEQ_LENGTH,
-        temperature=0.7,
+        temperature=0.6,
         # num_train_epochs = 1, # Set to 1 for a full training run
         max_steps=250,
         save_steps=250,
@@ -145,12 +141,12 @@ if __name__ == "__main__":
     trainer = GRPOTrainer(
         model=model,
         processing_class=tokenizer,
-        reward_funcs=[
+        reward_funcs=[  # type: ignore
             java_markdown_reward,
             format_reward,
             correctness_reward_func,
         ],
         args=training_args,
-        train_dataset=dataset["train"],
+        train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train()
