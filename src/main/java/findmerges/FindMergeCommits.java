@@ -288,9 +288,8 @@ public class FindMergeCommits {
     }
 
     String repoDirName =
-        (Files.exists(Paths.get("/scratch/")) ? "/scratch/" : "/tmp/")
-            + System.getProperty("user.name")
-            + "/ast-merge-eval-data/"
+        System.getenv().getOrDefault("REPOS_PATH", "repos")
+            + "/"
             + orgName
             + "/"
             + repoName;
