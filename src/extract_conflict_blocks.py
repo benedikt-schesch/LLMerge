@@ -28,6 +28,7 @@ This script:
 import argparse
 from pathlib import Path
 from typing import List, Tuple
+import shutil
 
 from loguru import logger
 from rich.progress import Progress
@@ -91,6 +92,23 @@ def match_subsequence(lines: List[str], subseq: List[str], start_idx: int = 0) -
     return -1
 
 
+def find_all_matches(
+    lines: List[str], subseq: List[str], start_idx: int = 0
+) -> List[int]:
+    """
+    Returns a list of all indices in `lines` where `subseq` (exact match) occurs.
+    """
+    matches = []
+    idx = start_idx
+    while idx < len(lines):
+        pos = match_subsequence(lines, subseq, idx)
+        if pos == -1:
+            break
+        matches.append(pos)
+        idx = pos + 1
+    return matches
+
+
 def get_before_after_context(
     lines: List[str],
     start_idx: int,
@@ -131,7 +149,72 @@ def get_before_after_context(
     return before_context, after_context
 
 
-# TODO: Improve this function
+# Updated function to handle non-unique matches.
+def extract_resolved_code(
+    merged_lines: List[str], conflict_lines: List[str], start_idx: int, end_idx: int
+) -> Tuple[List[str], List[str], List[str]]:
+    """
+    Extracts the resolved code from the merged file by matching the context
+    before and after the conflict block.
+
+    If both before and after contexts are non-unique in the merged file,
+    logs a warning and raises ValueError (skipping the case).
+    If one context is unique, selects the closest match for the other context
+    based on line distance.
+    """
+    before_ctx, after_ctx = get_before_after_context(conflict_lines, start_idx, end_idx)
+
+    before_matches = find_all_matches(merged_lines, before_ctx)
+    after_matches = find_all_matches(merged_lines, after_ctx)
+
+    if not before_matches:
+        logger.error("Before context not found in merged file.")
+        raise ValueError("Before context not found in merged file.")
+    if not after_matches:
+        logger.error("After context not found in merged file.")
+        raise ValueError("After context not found in merged file.")
+
+    # If both contexts are non-unique, log a warning and skip this case.
+    if len(before_matches) > 1 and len(after_matches) > 1:
+        logger.warning("Both before and after contexts are not unique in merged file.")
+        raise ValueError("Resolved code not found due to non-unique context matches.")
+
+    # If before context is unique, pick the closest after context (by line distance)
+    if len(before_matches) == 1:
+        i1 = before_matches[0]
+        valid_after = [a for a in after_matches if a >= i1 + len(before_ctx)]
+        if not valid_after:
+            logger.warning(
+                "No valid after context match found after the unique before context."
+            )
+            raise ValueError("Resolved code not found: no valid after context match.")
+        i2 = min(valid_after, key=lambda a: a - (i1 + len(before_ctx)))
+    # Else if after context is unique, pick the closest before context.
+    elif len(after_matches) == 1:
+        i2 = after_matches[0]
+        valid_before = [b for b in before_matches if b + len(before_ctx) <= i2]
+        if not valid_before:
+            logger.warning(
+                "No valid before context match found before the unique after context."
+            )
+            raise ValueError("Resolved code not found: no valid before context match.")
+        i1 = min(valid_before, key=lambda b: i2 - (b + len(before_ctx)))
+    else:
+        # Both contexts are unique.
+        i1 = before_matches[0]
+        i2 = after_matches[0]
+        if i1 + len(before_ctx) > i2:
+            logger.warning(
+                "Resolved code not found in merged file due to context ordering."
+            )
+            raise ValueError("Resolved code not found in merged file.")
+
+    start_after = i1 + len(before_ctx)
+    merged_before_ctx = merged_lines[i1:start_after]
+    merged_after_ctx = merged_lines[i2 : i2 + len(after_ctx)]
+    return merged_lines[start_after:i2], merged_before_ctx, merged_after_ctx
+
+
 def gather_conflict_plus_context(
     lines: List[str], start_idx: int, end_idx: int, context: int
 ) -> Tuple[str, List[str], List[str]]:
@@ -145,33 +228,6 @@ def gather_conflict_plus_context(
     after_context = lines[end_idx + 1 : context_end_idx]
     snippet = lines[context_begin_idx : min(len(lines), context_end_idx)]
     return "".join(snippet), before_context, after_context
-
-
-def extract_resolved_code(
-    merged_lines: List[str], conflict_lines: List[str], start_idx: int, end_idx: int
-) -> Tuple[List[str], List[str], List[str]]:
-    """
-    Extracts the resolved code from the merged file by matching the context
-    before and after the conflict block.
-    """
-
-    before_ctx, after_ctx = get_before_after_context(conflict_lines, start_idx, end_idx)
-
-    i1 = match_subsequence(merged_lines, before_ctx, 0)
-    if i1 < 0:
-        logger.error("Before context not found in merged file.")
-        raise ValueError("Before context not found in merged file.")
-    start_search = i1 + len(before_ctx)
-    i2 = match_subsequence(merged_lines, after_ctx, start_search)
-    if i2 < 0 or i1 >= i2:
-        logger.warning(
-            "Resolved code not found in merged file due to context ordering."
-        )
-        raise ValueError("Resolved code not found in merged file.")
-    start_after = i1 + len(before_ctx)
-    merged_before_ctx = merged_lines[i1:start_after]
-    merged_after_ctx = merged_lines[i2 : i2 + len(after_ctx)]
-    return merged_lines[start_after:i2], merged_before_ctx, merged_after_ctx
 
 
 def check_coherence(
@@ -234,8 +290,9 @@ def process_conflict_file(  # pylint: disable=too-many-locals
     merged_lines = final_file.read_text(encoding="utf-8").splitlines(keepends=True)
     blocks = split_conflict_blocks(conflict_lines)
     logger.info(f"Found {len(blocks)} conflict block(s) in {conflict_file}")
-
     for n, (start_idx, end_idx) in enumerate(blocks, start=1):
+        if basename == "12-54-0-9" and n == 9:
+            print("STOP")
         conflict_snippet, before_ctx, after_ctx = gather_conflict_plus_context(
             conflict_lines, start_idx, end_idx, context
         )
@@ -267,9 +324,6 @@ def process_conflict_file(  # pylint: disable=too-many-locals
         #    The lines from the conflict file’s after_ctx must match
         #    the beginning of merged_after_ctx if one is shorter.
         # ------------------
-        # NOTE: In extract_resolved_code, 'merged_after_ctx' currently
-        # is everything from i2 to the end. You might want to slice it
-        # if you need just the portion that should match after_ctx.
         try:
             check_coherence(after_ctx, merged_after_ctx, alignment="prefix")
         except ValueError as e:
@@ -320,6 +374,7 @@ def main():
 
     input_dir = Path(args.input_dir)
     output_dir = Path(args.output_dir)
+    shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     conflict_files = sorted(input_dir.rglob("*.conflict"))
     conflict_files = [f for f in conflict_files if "conflict_blocks" not in f.parts]

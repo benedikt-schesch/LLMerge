@@ -21,6 +21,7 @@ import argparse
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
+import sys
 import shutil
 from pathlib import Path
 from typing import List
@@ -29,12 +30,87 @@ from git import GitCommandError, Repo
 from loguru import logger
 from rich.progress import Progress
 
-from find_merges import get_repo, get_merges
-
 
 logger.add("run.log", rotation="10 MB")
 
 WORKING_DIR = Path(".workdir")
+
+
+def read_github_credentials() -> tuple[str, str]:
+    """
+    Returns a tuple (username, token) for GitHub authentication:
+      1) Reads from ~/.github-personal-access-token if present
+            (first line = user, second line = token).
+      2) Otherwise uses environment variable GITHUB_TOKEN (with user="Bearer").
+      3) Exits if neither is available.
+
+    Raises:
+        RuntimeError: If neither ~/.github-personal-access-token nor GITHUB_TOKEN is available.
+
+    Returns:
+        tuple[str, str]
+            A tuple (username, token) for GitHub authentication.
+    """
+    token_file = Path.home() / ".github-personal-access-token"
+    env_token = os.getenv("GITHUB_TOKEN")
+    if token_file.is_file():
+        lines = token_file.read_text(encoding="utf-8").splitlines()
+        if len(lines) < 2:
+            sys.exit("~/.github-personal-access-token must have at least two lines.")
+        return lines[0].strip(), lines[1].strip()
+    if env_token:
+        return "Bearer", env_token
+    raise RuntimeError("Need ~/.github-personal-access-token or GITHUB_TOKEN.")
+
+
+def get_repo(repo_slug: str, log: bool = False) -> Repo:
+    """
+    Clone or reuse a local copy of 'org/repo_name' under repos_cache/org/repo_name.
+    Returns a GitPython Repo object.
+
+    Arguments:
+        org: str
+            The organization name.
+        repo_name: str
+            The repository name.
+        log: bool
+            If True, log cloning/reusing messages.
+
+    Raises:
+        GitCommandError: If the repository cannot be cloned.
+
+    Returns:
+        Repo
+            A GitPython Repo object for the
+    """
+    repos_cache = Path(os.getenv("REPOS_PATH", "repos"))
+    repo_dir = repos_cache / f"{repo_slug}"
+    github_user, github_token = read_github_credentials()
+
+    if not repo_dir.is_dir():
+        if log:
+            logger.info(f"Cloning {repo_slug} into {repo_dir}...")
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        if github_user == "Bearer":
+            clone_url = f"https://{github_token}@github.com/{repo_slug}.git"
+        else:
+            clone_url = (
+                f"https://{github_user}:{github_token}@github.com/{repo_slug}.git"
+            )
+        try:
+            os.environ["GIT_TERMINAL_PROMPT"] = "0"
+            os.environ["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+            repo = Repo.clone_from(clone_url, repo_dir, multi_options=["--no-tags"])
+            repo.remote().fetch()
+            repo.remote().fetch("refs/pull/*/head:refs/remotes/origin/pull/*")
+            return repo
+        except GitCommandError as e:
+            logger.error(f"Failed to clone {repo_slug}: {e}")
+            raise
+    else:
+        if log:
+            logger.info(f"Reusing existing repo {repo_slug} at {repo_dir}")
+        return Repo(str(repo_dir))
 
 
 def concatenate_csvs(input_path: Path) -> pd.DataFrame:
@@ -159,7 +235,9 @@ def reproduce_merge_and_extract_conflicts(
     return result
 
 
-def process_single_repo(repo_slug: str, repo_idx: int, output_dir: Path):
+def process_single_repo(
+    repo_slug: str, repo_idx: int, output_dir: Path, merges_dir: Path
+):
     """
     Worker function to handle all merges for one repository.
     Uses a cache (a CSV file) that records, for each merge,
@@ -200,12 +278,14 @@ def process_single_repo(repo_slug: str, repo_idx: int, output_dir: Path):
             logger.info(f"Skipping {repo_slug} as all conflicts are already processed.")
             return cache_df
 
+    logger.info(f"Processing {repo_slug}...")
+
     try:
         repo = get_repo(repo_slug)
     except Exception as e:
         logger.error(f"Error cloning {repo_slug}: {e}")
         return pd.DataFrame()
-    merges = get_merges(repo, repo_slug, output_dir / "merges")
+    merges = pd.read_csv(merges_dir / f"{repo_slug}.csv")
 
     cache_df = merges.copy()
     cache_df["conflicts"] = ""
@@ -232,7 +312,7 @@ def process_single_repo(repo_slug: str, repo_idx: int, output_dir: Path):
         shutil.rmtree(temp_dir, ignore_errors=True)
         return merge_id, ";".join(conflicts)
 
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    with ThreadPoolExecutor(max_workers=32) as executor:
         futures = {
             executor.submit(process_merge, merge_id, merge_row): merge_id
             for merge_id, merge_row in merges.iterrows()
@@ -253,19 +333,27 @@ def main():
     parser = argparse.ArgumentParser(description="Extract conflict files from merges.")
     parser.add_argument(
         "--repos",
-        default="input_data/repos_small.csv",
+        default="input_data/repos_50.csv",
+        type=Path,
         help="CSV with merges (org/repo, merge_commit, parent_1, parent_2)",
     )
     parser.add_argument(
         "--output_dir",
-        default="merges/repos_small",
+        default="merges/repos_50",
         help="Directory to store conflict files",
+        type=Path,
+    )
+    parser.add_argument(
+        "--merges",
+        default="merges/repos_50/merges",
+        type=Path,
+        help="Directory to store merge CSV files",
     )
     parser.add_argument(
         "--n_threads",
         required=False,
         type=int,
-        default=6,
+        default=1,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     args = parser.parse_args()
@@ -283,6 +371,7 @@ def main():
         process_single_repo(
             repo_slug=row["repository"],
             repo_idx=row.name,
+            merges_dir=args.merges,
             output_dir=output_dir,
         )
 

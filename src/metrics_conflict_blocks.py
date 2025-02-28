@@ -133,17 +133,15 @@ def split_conflict_block(
     return left_parent, right_parent, None if not encountered_base_marker else base
 
 
-def is_sublist(sub: List[str], parent: List[str]) -> bool:
+def functional_equality(left: List[str], right: List[str]) -> bool:
     """
-    Checks if the list 'sub' is a contiguous sublist of 'parent'.
-    Returns True if it is, otherwise False.
+    Check if two lists of strings are functionally equivalent.
     """
-    if not sub:
-        return True
-    for i in range(len(parent) - len(sub) + 1):
-        if parent[i : i + len(sub)] == sub:
-            return True
-    return False
+
+    def normalize(lst: List[str]) -> str:
+        return "".join(lst).replace(" ", "").replace("\t", "")
+
+    return normalize(left) == normalize(right)
 
 
 def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
@@ -155,13 +153,13 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
     )
     parser.add_argument(
         "--input_dir",
-        default="merges/repos_small/conflict_blocks",
+        default="merges/repos_50/conflict_blocks",
         help="Directory containing <basename><n>.conflict and "
         "<basename><n>.resolved_conflict files",
     )
     parser.add_argument(
         "--csv_out",
-        default="merges/repos_small/conflict_metrics.csv",
+        default="merges/repos_50/conflict_metrics.csv",
         help="Path to the output CSV file.",
     )
     parser.add_argument(
@@ -174,7 +172,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
     parser.add_argument(
         "--filtered_output_dir",
         type=str,
-        default="merges/repos_small/filtered_conflicts",
+        default="merges/repos_50/filtered_conflicts",
         help="If specified, copy filtered .conflict/.resolved_conflict pairs to this directory.",
     )
     parser.add_argument(
@@ -196,8 +194,9 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
         sys.exit(0)
 
     # Create output directory if needed
-    if args.filtered_output_dir:
-        Path(args.filtered_output_dir).mkdir(parents=True, exist_ok=True)
+    output_dir = Path(args.filtered_output_dir)
+    shutil.rmtree(output_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Prepare a list for metric rows
     rows = []
@@ -237,8 +236,8 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
             resolution = resolved_lines[len(before_ctx) : -len(after_ctx)]
 
         # Check if the resolution is fully contained in either left_parent or right_parent.
-        res_in_left = is_sublist(resolution, left_parent)
-        res_in_right = is_sublist(resolution, right_parent)
+        res_in_left = functional_equality(resolution, left_parent)
+        res_in_right = functional_equality(resolution, right_parent)
 
         # Compute all metrics
         metrics = {
@@ -278,9 +277,9 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
         rows.append(row_data)
 
         # If selected and an output folder was provided, copy the files
-        if selected and args.filtered_output_dir:
-            out_conflict = Path(args.filtered_output_dir) / conflict_path.name
-            out_resolved = Path(args.filtered_output_dir) / resolved_path.name
+        if selected:
+            out_conflict = output_dir / conflict_path.name
+            out_resolved = output_dir / resolved_path.name
             shutil.copy2(conflict_path, out_conflict)
             shutil.copy2(resolved_path, out_resolved)
 
@@ -289,10 +288,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
     df.to_csv(args.csv_out, index=False, encoding="utf-8")
 
     logger.info(f"Metrics (with 'selected' column) have been written to {args.csv_out}")
-    if args.filtered_output_dir:
-        logger.info(f"Selected conflicts copied to {args.filtered_output_dir}")
-    else:
-        logger.info("No output directory specified; nothing copied.")
+    logger.info(f"Selected conflicts copied to {output_dir}")
 
 
 if __name__ == "__main__":

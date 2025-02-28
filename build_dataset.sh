@@ -8,8 +8,13 @@ KEEP_FLAG=${3:-}  # Optional third argument, e.g. "-keep_trivial_resolution"
 # Remove the current logs
 rm run.log
 
+./gradlew -q assemble -g ../.gradle/
+
+java -cp build/libs/findmerges-all.jar findmerges.FindMergeCommits $REPOS_DIR $OUT_DIR/merges
+
 python3 src/get_conflict_files.py \
     --repos "$REPOS_DIR" \
+    --merges_dir "$OUT_DIR/merges" \
     --output_dir "$OUT_DIR"
 
 python3 src/extract_conflict_blocks.py \
