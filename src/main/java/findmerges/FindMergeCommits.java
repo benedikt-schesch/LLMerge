@@ -338,15 +338,20 @@ public class FindMergeCommits {
 
     List<Ref> branches = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
     branches = withoutDuplicateBranches(branches);
+    System.out.println("Found " + branches.size() + " unique branches in repository " + orgName + "/" + repoName);
 
     // No parallel streaming; track total merges so far and stop after 1000
     int mergesSoFar = 0;
     Random random = new Random(RANDOM_SEED);
+    int branchCount = 0;
 
     for (Ref branch : branches) {
+      branchCount++;
       if (mergesSoFar >= MAX_TOTAL_MERGE_COMMITS) {
+        System.out.println("Reached max merge commit limit of " + MAX_TOTAL_MERGE_COMMITS + ", stopping branch processing");
         break;
       }
+      System.out.println("Processing branch " + branchCount + "/" + branches.size() + ": " + branch.getName());
       mergesSoFar = writeMergeCommitsForBranch(
           git, repo, branch, writer, idx, mergesSoFar, random);
     }
@@ -402,7 +407,11 @@ public class FindMergeCommits {
     int mergesWrittenHere = 0;
 
     // Write them out
+    int processedCount = 0;
+    int totalToProcess = mergeCommits.size();
+    
     for (RevCommit commit : mergeCommits) {
+      processedCount++;
       // Double-check it's a merge
       if (commit.getParentCount() != 2) {
         continue;
@@ -444,6 +453,12 @@ public class FindMergeCommits {
 
       writer.write(String.format("%d,%s", idx.getAndIncrement(), line));
       writer.newLine();
+
+      // Print progress for this merge commit
+      String shortId = commit.getId().getName().substring(0, 7);
+      String noteInfo = notes.isEmpty() ? "" : " (" + notes + ")";
+      System.out.printf("  Merge %d/%d: %s - %s%s%n", 
+                        processedCount, totalToProcess, shortId, commit.getShortMessage(), noteInfo);
 
       mergesWrittenHere++;
     }
