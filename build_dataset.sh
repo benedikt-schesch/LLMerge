@@ -8,7 +8,7 @@ KEEP_FLAG=${3:-}  # Optional third argument, e.g. "-keep_trivial_resolution"
 # Remove the current logs
 rm run.log
 
-./gradlew -q assemble -g ../.gradle/
+./gradlew -q assemble -g ../.gradle/ --rerun-tasks
 
 java -cp build/libs/findmerges-all.jar findmerges.FindMergeCommits $REPOS_DIR $OUT_DIR/merges
 

@@ -42,6 +42,7 @@ import org.kohsuke.github.GitHub;
 import org.kohsuke.github.GitHubBuilder;
 import org.plumelib.util.StringsPlume;
 import me.tongfei.progressbar.ProgressBar;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Given a list of repositories, outputs a list of merge commits. The merge commits may be on the
@@ -60,17 +61,14 @@ import me.tongfei.progressbar.ProgressBar;
  *       this), or
  *   <li>a {@code .github-personal-access-token} file in your home directory whose first line is
  *       your GitHub username, whose second line is a read-only personal access token, and all other
- *       lines are ignored. (See <a
- *       href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-fine-grained-personal-access-token">Creating
- *       a fine-grained personal access token</a>.) Make sure the file is not world-readable.
+ *       lines are ignored.
  * </ul>
  */
-// TODO: This program should delete files from /tmp directory after using them, in order to avoid
-// filling up the disk.
 public class FindMergeCommits {
 
-  /** The maximum number of merge commits to output for any given branch. */
-  private static final int MAX_MERGE_COMMITS = 10000;
+  // new total merge cap and fixed random seed for reproducibility
+  private static final int MAX_TOTAL_MERGE_COMMITS = 10;
+  private static final long RANDOM_SEED = 42;
 
   /** The GitHub repositories to search for merge commits. */
   final List<OrgAndRepo> repos;
@@ -122,10 +120,6 @@ public class FindMergeCommits {
 
     this.gitHub =
         GitHubBuilder.fromEnvironment()
-            // Use a cache to avoid repeating the same query multiple times (but the OkHttp class
-            // is deprecated).
-            // .withConnector(new OkHttpConnector(new OkUrlFactory(new
-            // OkHttpClient().setCache(cache))))
             .build();
 
     outputDir.toFile().mkdirs();
@@ -136,8 +130,9 @@ public class FindMergeCommits {
     String gitHubUsername;
     String gitHubPersonalAccessToken;
     if (tokenFile.exists()) {
-      try (@SuppressWarnings("DefaultCharset")
-          BufferedReader pwReader = new BufferedReader(new FileReader(tokenFile) /*, UTF_8*/)) {
+      try (
+          @SuppressWarnings("DefaultCharset")
+          BufferedReader pwReader = new BufferedReader(new FileReader(tokenFile))) {
         gitHubUsername = pwReader.readLine();
         gitHubPersonalAccessToken = pwReader.readLine();
       }
@@ -219,8 +214,9 @@ public class FindMergeCommits {
    */
   static List<OrgAndRepo> reposFromCsv(String inputFileName) throws IOException, GitAPIException {
     List<OrgAndRepo> repos = new ArrayList<>();
-    try (@SuppressWarnings("DefaultCharset")
-            FileReader fr = new FileReader(inputFileName /*, UTF_8*/);
+    try (
+        @SuppressWarnings("DefaultCharset")
+        FileReader fr = new FileReader(inputFileName);
         CSVReaderHeaderAware csvReader = new CSVReaderHeaderAware(fr)) {
       String[] repoColumn;
       while ((repoColumn = csvReader.readNext("repository")) != null) {
@@ -241,11 +237,11 @@ public class FindMergeCommits {
    */
   void writeMergeCommitsForRepos() throws IOException, GitAPIException {
     System.out.printf("FindMergeCommits: %d repositories.%n", repos.size());
-    // Parallel execution for each repository.
+    // Parallel streams
     try (ProgressBar pb = new ProgressBar("Processing repos", repos.size())) {
       repos.parallelStream().forEach(repo -> {
-        writeMergeCommitsForRepo(repo);
-        pb.step();
+          writeMergeCommitsForRepo(repo);
+          pb.step();
       });
     }
   }
@@ -281,9 +277,6 @@ public class FindMergeCommits {
     File outputFile = new File(orgOutputDir.toFile(), repoName + ".csv");
     Path outputPath = outputFile.toPath();
     if (Files.exists(outputPath)) {
-      // File exists, so there is nothing to do.
-      // System.out.printf(
-      //     "writeMergeCommits(%s, %s) CACHED; outputFile = %s%n", orgName, repoName, outputFile);
       return;
     }
 
@@ -296,18 +289,6 @@ public class FindMergeCommits {
     File repoDirFile = new File(repoDirName);
     repoDirFile.mkdirs();
 
-    // With these assignments, git.branchList() always returns an empty list!
-    // So delete and re-clone. :-(
-    //      System.out.println("Clone " + repoDirFile + " already exists.");
-    //      repo = new FileRepository(repoDirFile);
-    //      git = new Git(repo);
-
-    if (repoDirFile.exists()) {
-      // Delete the directory.
-      try (Stream<Path> pathStream = Files.walk(repoDirFile.toPath())) {
-        pathStream.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-      }
-    }
     Git git;
     try {
       git =
@@ -328,18 +309,20 @@ public class FindMergeCommits {
     FileRepository repo = new FileRepository(repoDirFile);
 
     makeBranchesForPullRequests(git);
+    AtomicInteger idx = new AtomicInteger(1);
 
     try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
       // Write the CSV header
       writer.write("branch_name,merge_commit,parent_1,parent_2,notes");
       writer.newLine();
 
-      writeMergeCommitsForBranches(git, repo, orgName, repoName, writer);
+      writeMergeCommitsForBranches(git, repo, orgName, repoName, writer, idx);
     }
   }
 
   /**
-   * Write, to {@code writer}, all the merge commits in all the branches of the given repository.
+   * Write, to {@code writer}, all the merge commits in all the branches of the given repository,
+   * stopping once we have collected {@value #MAX_TOTAL_MERGE_COMMITS}.
    *
    * @param git the JGit porcelain
    * @param repo the JGit file system repository
@@ -350,98 +333,95 @@ public class FindMergeCommits {
    * @throws GitAPIException if there is trouble running Git commands
    */
   void writeMergeCommitsForBranches(
-      Git git, FileRepository repo, String orgName, String repoName, BufferedWriter writer)
+      Git git, FileRepository repo, String orgName, String repoName, BufferedWriter writer, AtomicInteger idx)
       throws IOException, GitAPIException {
 
     List<Ref> branches = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
     branches = withoutDuplicateBranches(branches);
-    // Use a thread-safe set for merge commit ObjectIds.
-    Set<ObjectId> written = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    // Process branches in parallel and collect CSV lines.
-    List<String> lines = branches.parallelStream().flatMap(branch -> {
-      try {
-        return writeMergeCommitsForBranch(git, repo, branch, written).stream();
-      } catch (IOException | GitAPIException e) {
-        throw new RuntimeException(e);
+    // No parallel streaming; track total merges so far and stop after 1000
+    int mergesSoFar = 0;
+    Random random = new Random(RANDOM_SEED);
+
+    for (Ref branch : branches) {
+      if (mergesSoFar >= MAX_TOTAL_MERGE_COMMITS) {
+        break;
       }
-    }).collect(Collectors.toList());
-
-    // Write the collected lines sequentially with an index column added.
-    int idx = 1;
-    for (String line : lines) {
-      writer.write(String.format("%d,%s", idx, line));
-      writer.newLine();
-      idx++;
+      mergesSoFar = writeMergeCommitsForBranch(
+          git, repo, branch, writer, idx, mergesSoFar, random);
     }
   }
 
   /**
-   * Write, to {@code writer}, all the merge commits in one branch of the given repository.
+   * Write, to {@code writer}, all the merge commits in one branch of the given repository,
+   * without exceeding {@value #MAX_TOTAL_MERGE_COMMITS}.
    *
    * @param git the JGit porcelain
    * @param repo the JGit file system repository
    * @param branch the branch whose commits to output
-   * @param written a set of refs that have already been written, to prevent duplicates in the
-   *     output
-   * @return the next index to use for output lines
+   * @param writer where to write the merges
+   * @param idx atomic counter for numbering merges
+   * @param mergesSoFar how many merges have been written so far (across all branches)
+   * @param random the Random instance (seeded) for reproducibility
+   * @return updated mergesSoFar
    * @throws IOException if there is trouble reading or writing files
    * @throws GitAPIException if there is trouble running Git commands
    */
-  List<String> writeMergeCommitsForBranch(
-      Git git, FileRepository repo, Ref branch, Set<ObjectId> written)
+  int writeMergeCommitsForBranch(
+      Git git,
+      FileRepository repo,
+      Ref branch,
+      BufferedWriter writer,
+      AtomicInteger idx,
+      int mergesSoFar,
+      Random random)
       throws IOException, GitAPIException {
 
-    List<String> lines = new ArrayList<>();
     ObjectId branchId = branch.getObjectId();
     if (branchId == null) {
       throw new Error("no ObjectId for " + branch);
     }
 
+    // Collect merges from this branch
     List<RevCommit> mergeCommits = new ArrayList<>();
     Iterable<RevCommit> commits = git.log().add(branchId).call();
     for (RevCommit commit : commits) {
-      RevCommit[] parents = commit.getParents();
-      if (parents.length == 2) {
+      if (commit.getParentCount() == 2) {
         mergeCommits.add(commit);
       }
     }
-    if (mergeCommits.size() > MAX_MERGE_COMMITS) {
-      System.out.printf(
-          "FindMergeCommits: selecting %d merges from %d on branch %s of %s%n",
-          MAX_MERGE_COMMITS, mergeCommits.size(), branch, repo);
-      Random r = new Random(0);
-      Collections.shuffle(mergeCommits, r);
-      mergeCommits = mergeCommits.subList(0, MAX_MERGE_COMMITS);
+
+    // If mergesSoFar + mergesInBranch exceeds the cap, randomly select only enough merges.
+    int maxAllowedForThisBranch = MAX_TOTAL_MERGE_COMMITS - mergesSoFar;
+    if (mergeCommits.size() > maxAllowedForThisBranch) {
+      Collections.shuffle(mergeCommits, random);
+      mergeCommits = mergeCommits.subList(0, maxAllowedForThisBranch);
     }
 
-    // This loop cannot be parallelized, beacuse of the `index` variable.
+    // Keep track of merges we've written for this branch
+    int mergesWrittenHere = 0;
+
+    // Write them out
     for (RevCommit commit : mergeCommits) {
-      RevCommit[] parents = commit.getParents();
-      if (parents.length != 2) {
-        // This is not a merge commit.
+      // Double-check it's a merge
+      if (commit.getParentCount() != 2) {
         continue;
       }
-
       ObjectId mergeId = commit.toObjectId();
 
-      boolean newMerge = written.add(mergeId);
-      // Whenever an already-processed merge is seen, all older merges have also been processed, but
-      // this code does not depend on the order of results from `git log`.
-      if (!newMerge) {
+      RevCommit parent1 = commit.getParent(0);
+      RevCommit parent2 = commit.getParent(1);
+      if (parent1.equals(parent2)) {
         continue;
       }
 
-      RevCommit parent1 = parents[0];
       ObjectId parent1Id = parent1.toObjectId();
-      RevCommit parent2 = parents[1];
       ObjectId parent2Id = parent2.toObjectId();
       RevCommit mergeBase = getMergeBaseCommit(git, repo, parent1, parent2);
       ObjectId mergeBaseId;
       String notes;
 
       if (mergeBase == null) {
-        // This merge originated from two distinct initial commits.
         notes = "two initial commits";
         mergeBaseId = null;
       } else {
@@ -453,16 +433,22 @@ public class FindMergeCommits {
         }
       }
 
-      // Build CSV line without an index: branch_name,merge_commit,parent_1,parent_2,notes
-      String line = String.format("%s,%s,%s,%s,%s",
+      // branch_name,merge_commit,parent_1,parent_2,notes
+      String line = String.format(
+          "%s,%s,%s,%s,%s",
           branch.getName(),
           ObjectId.toString(mergeId),
           ObjectId.toString(parent1Id),
           ObjectId.toString(parent2Id),
           notes);
-      lines.add(line);
+
+      writer.write(String.format("%d,%s", idx.getAndIncrement(), line));
+      writer.newLine();
+
+      mergesWrittenHere++;
     }
-    return lines;
+
+    return mergesSoFar + mergesWrittenHere;
   }
 
   /**
@@ -473,7 +459,6 @@ public class FindMergeCommits {
    * @throws GitAPIException if there is trouble running Git commands
    */
   void makeBranchesForPullRequests(Git git) throws IOException, GitAPIException {
-    // No leading "+" in the refspec because all of these updates should be fast-forward.
     git.fetch()
         .setRemote("origin")
         .setRefSpecs("refs/pull/*/head:refs/remotes/origin/pull/*")
@@ -518,7 +503,8 @@ public class FindMergeCommits {
    * @param commit2 the second parent commit
    * @return the merge base of the two commits, or null if none exists
    */
-  @Nullable RevCommit getMergeBaseCommit(
+  @Nullable
+  RevCommit getMergeBaseCommit(
       Git git, Repository repo, RevCommit commit1, RevCommit commit2) {
     if (commit1.equals(commit2)) {
       throw new Error(
@@ -551,8 +537,6 @@ public class FindMergeCommits {
       }
 
       if (commonPrefixLength == 0) {
-        // Sometimes, a repository contains multiple initial commits.  (Or, they may result from a
-        // mistake while squashing commits.)  Ignore merges that involve two initial commits.
         return null;
       } else if (commonPrefixLength == -1) {
         throw new Error(
@@ -565,88 +549,6 @@ public class FindMergeCommits {
     } catch (Exception e) {
       throw new Error(
           String.format("getMergeBaseCommit(%s, %s, %s, %s)", git, repo, commit1, commit2), e);
-    }
-  }
-
-  // I got the error
-  //   java.lang.Error: org.eclipse.jgit.errors.MissingObjectException: Missing unknown
-  // 7f8b42c391eaa92fdfcaae4e7cb37cc84be91d4e
-  // Maybe see https://www.eclipse.org/forums/index.php/t/1091725/ ??
-  /**
-   * Given two commits, return their merge base commit. It is the nearest ancestor of both commits.
-   *
-   * <p>Since only two commits are passed in, this always returns an existing commit, never a
-   * synthetic one. When a criss-cross merge exists in the history, this outputs an arbitrary one of
-   * the best merge bases.
-   *
-   * @param git the JGit porcelain
-   * @param repo the JGit repository
-   * @param commit1 the first parent commit
-   * @param commit2 the second parent commit
-   * @return the merge base of the two commits
-   */
-  RevCommit getMergeBaseCommit2(Git git, Repository repo, RevCommit commit1, RevCommit commit2) {
-    try {
-      RevWalk walk = new RevWalk(repo);
-      walk.setRevFilter(RevFilter.MERGE_BASE);
-      walk.markStart(walk.parseCommit(commit1));
-      walk.markStart(walk.parseCommit(commit2));
-      ArrayList<RevCommit> baseCommits = new ArrayList<>();
-      RevCommit c;
-      while ((c = walk.next()) != null) {
-        baseCommits.add(c);
-      }
-      if (baseCommits.size() == 1) {
-        return baseCommits.get(0);
-      }
-      throw new Error(
-          String.format(
-              "Wrong number of base commits for getMergeBaseCommit(%s, \"%s\", \"%s\"): %s",
-              repo, commit1, commit2, baseCommits));
-    } catch (IOException e) {
-      throw new Error(
-          String.format("getMergeBaseCommit2(%s, %s, %s, %s)", git, repo, commit1, commit2), e);
-    }
-  }
-
-  // This doesn't work; I don't know why.
-  // Maybe see https://www.eclipse.org/forums/index.php/t/1091725/ ??
-  /**
-   * Given two commits, return their merge base commit. It is the nearest ancestor of both commits.
-   *
-   * <p>Since only two commits are passed in, this always returns an existing commit, never a
-   * synthetic one. When a criss-cross merge exists in the history, this outputs an arbitrary one of
-   * the best merge bases.
-   *
-   * @param git the JGit porcelain
-   * @param repo the JGit repository
-   * @param commit1 the first parent commit
-   * @param commit2 the second parent commit
-   * @return the merge base of the two commits
-   */
-  RevCommit getMergeBaseCommit3(Git git, Repository repo, RevCommit commit1, RevCommit commit2) {
-    try {
-      Constructor<RecursiveMerger> constructor =
-          RecursiveMerger.class.getDeclaredConstructor(Repository.class);
-      constructor.setAccessible(true);
-      Method getBaseCommitMethod =
-          RecursiveMerger.class.getDeclaredMethod(
-              "getBaseCommit", RevCommit.class, RevCommit.class);
-      getBaseCommitMethod.setAccessible(true);
-
-      RecursiveMerger recursiveMerger = constructor.newInstance(repo);
-      RevCommit baseCommit =
-          (RevCommit) getBaseCommitMethod.invoke(recursiveMerger, commit1, commit2);
-      if (baseCommit == null) {
-        throw new Error(
-            String.format(
-                "null baseCommit for getMergeBaseCommit(%s, \"%s\", \"%s\")",
-                repo, commit1, commit2));
-      }
-      return baseCommit;
-    } catch (Exception e) {
-      throw new Error(
-          String.format("getMergeBaseCommit3(%s, %s, %s, %s)", git, repo, commit1, commit2), e);
     }
   }
 }
