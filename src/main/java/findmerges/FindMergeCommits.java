@@ -275,8 +275,27 @@ public class FindMergeCommits {
     orgOutputDir.toFile().mkdirs();
     File outputFile = new File(orgOutputDir.toFile(), repoName + ".csv");
     Path outputPath = outputFile.toPath();
-    if (Files.exists(outputPath)) {
-      return;
+    
+    // Check if the file exists and if it has enough entries
+    AtomicInteger idx = new AtomicInteger(1);
+    boolean fileExists = Files.exists(outputPath);
+    
+    if (fileExists) {
+      try (Stream<String> lines = Files.lines(outputPath)) {
+        long lineCount = lines.count();
+        // Header line doesn't count as a merge entry
+        if (lineCount > 1) {
+          int existingEntries = (int)lineCount - 1;
+          if (existingEntries >= MAX_TOTAL_MERGE_COMMITS) {
+            System.out.println("Output file already has " + existingEntries + " entries, which is enough. Skipping " + orgAndRepo);
+            return;
+          }
+          System.out.println("Output file has " + existingEntries + " entries, but need " + MAX_TOTAL_MERGE_COMMITS + 
+                            ". Computing more for " + orgAndRepo);
+          // Set the index to continue from the last entry
+          idx.set(existingEntries + 1);
+        }
+      }
     }
 
     String repoDirName =
@@ -310,10 +329,18 @@ public class FindMergeCommits {
     makeBranchesForPullRequests(git);
     AtomicInteger idx = new AtomicInteger(1);
 
-    try (BufferedWriter writer = Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
-      // Write the CSV header
-      writer.write("branch_name,merge_commit,parent_1,parent_2,notes");
-      writer.newLine();
+    boolean fileExists = Files.exists(outputPath);
+    
+    try (BufferedWriter writer = fileExists ? 
+         Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8, 
+                                java.nio.file.StandardOpenOption.APPEND) : 
+         Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
+         
+      // Write the CSV header only for new files
+      if (!fileExists) {
+        writer.write("branch_name,merge_commit,parent_1,parent_2,notes");
+        writer.newLine();
+      }
 
       writeMergeCommitsForBranches(git, repo, orgName, repoName, writer, idx);
     }
@@ -336,10 +363,16 @@ public class FindMergeCommits {
       throws IOException, GitAPIException {
 
     List<Ref> branches = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
+    
+    // Sort branches deterministically by name before removing duplicates
+    // to ensure the same branch is kept regardless of original order
+    branches.sort(Comparator.comparing(Ref::getName));
+    
     branches = withoutDuplicateBranches(branches);
+    
     System.out.println("Found " + branches.size() + " unique branches in repository " + orgName + "/" + repoName);
 
-    // No parallel streaming; track total merges so far and stop after 1000
+    // No parallel streaming; track total merges so far and stop after max merge commits
     int mergesSoFar = 0;
     Random random = new Random(RANDOM_SEED);
     int branchCount = 0;
@@ -395,7 +428,12 @@ public class FindMergeCommits {
       }
     }
 
+    // Sort the list deterministically before shuffling to ensure consistent results
+    // across different runs with the same seed, regardless of initial collection order
+    mergeCommits.sort(Comparator.comparing(commit -> commit.getId().getName()));
+    
     // If mergesSoFar + mergesInBranch exceeds the cap, randomly select only enough merges.
+    // The random selection is still deterministic because we use a fixed seed
     int maxAllowedForThisBranch = MAX_TOTAL_MERGE_COMMITS - mergesSoFar;
     if (mergeCommits.size() > maxAllowedForThisBranch) {
       Collections.shuffle(mergeCommits, random);
