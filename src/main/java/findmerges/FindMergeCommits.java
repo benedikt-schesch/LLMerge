@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class FindMergeCommits {
 
   // new total merge cap and fixed random seed for reproducibility
-  private static final int MAX_TOTAL_MERGE_COMMITS = 10;
+  private static final int MAX_TOTAL_MERGE_COMMITS = 10000;
   private static final long RANDOM_SEED = 42;
 
   /** The GitHub repositories to search for merge commits. */
@@ -237,7 +237,6 @@ public class FindMergeCommits {
    */
   void writeMergeCommitsForRepos() throws IOException, GitAPIException {
     System.out.printf("FindMergeCommits: %d repositories.%n", repos.size());
-    // Parallel streams
     try (ProgressBar pb = new ProgressBar("Processing repos", repos.size())) {
       repos.parallelStream().forEach(repo -> {
           writeMergeCommitsForRepo(repo);
@@ -409,7 +408,7 @@ public class FindMergeCommits {
     // Write them out
     int processedCount = 0;
     int totalToProcess = mergeCommits.size();
-    
+
     for (RevCommit commit : mergeCommits) {
       processedCount++;
       // Double-check it's a merge
@@ -454,11 +453,7 @@ public class FindMergeCommits {
       writer.write(String.format("%d,%s", idx.getAndIncrement(), line));
       writer.newLine();
 
-      // Print progress for this merge commit
-      String shortId = commit.getId().getName().substring(0, 7);
-      String noteInfo = notes.isEmpty() ? "" : " (" + notes + ")";
-      System.out.printf("  Merge %d/%d: %s - %s%s%n", 
-                        processedCount, totalToProcess, shortId, commit.getShortMessage(), noteInfo);
+      System.out.printf("  Merge %s: %d/%d\n", repo.getDirectory().getName(), processedCount, totalToProcess);
 
       mergesWrittenHere++;
     }

@@ -312,20 +312,26 @@ def process_single_repo(
         shutil.rmtree(temp_dir, ignore_errors=True)
         return merge_id, ";".join(conflicts)
 
-    with ThreadPoolExecutor(max_workers=32) as executor:
-        futures = {
-            executor.submit(process_merge, merge_id, merge_row): merge_id
-            for merge_id, merge_row in merges.iterrows()
-        }
-        for future in as_completed(futures):
-            merge_id, conflict_str = future.result()
-            cache_df.at[merge_id, "conflicts"] = conflict_str
+    with Progress() as progress:
+        # Creating a task with total count
+        task = progress.add_task(f"Processing {repo_slug}...", total=len(merges))
+
+        with ThreadPoolExecutor(max_workers=32) as executor:
+            futures = {
+                executor.submit(process_merge, merge_id, merge_row): merge_id
+                for merge_id, merge_row in merges.iterrows()
+            }
+
+            for future in as_completed(futures):
+                merge_id, conflict_str = future.result()
+                cache_df.at[merge_id, "conflicts"] = conflict_str
+
+                # Update the progress bar
+                progress.update(task, advance=1, merge_id=merge_id)
 
     # Save the updated cache
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_df.to_csv(cache_file)
-    # Also clean up the original repo clone, if any
-    shutil.rmtree(repo.working_dir, ignore_errors=True)
 
 
 def main():

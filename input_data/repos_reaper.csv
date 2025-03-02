@@ -510,7 +510,6 @@ idx,repository,language,architecture,community,continuous_integration,documentat
 59595,wongcain/MVP-Simple-Demo,Java,0.904762,1,0,0.074586,0.0,0.0,0,1050,0.282454,169,0,0,1,0
 59746,elastic/elasticsearch-mapper-attachments,Java,1.0,2,0,0.223846,4.37037,0.37037,1,2412,0.623877,322,1,1,1,1
 60407,gjoseph/BarbaryWatchService,Java,1.0,2,1,0.367836,0.453125,0.0625,1,1081,0.041184,16,1,0,1,1
-60965,elastic/elasticsearch,Java,0.987617,20,1,0.224747,13.852459,10.491803,1,450592,0.329683,15698,1,1,1,1
 61251,tjanson/WifiLocationLogger,Java,0.8,1,0,0.109723,0.0,0.0,0,1058,0.0,15,0,0,0,0
 61314,MacroYau/ThingSpeakAndroid,Java,0.769231,1,0,0.358912,0.0,0.0,1,1354,0.0,9,0,0,1,0
 61462,elastic/elasticsearch-transport-memcached,Java,0.894737,3,0,0.246839,1.846154,0.051282,1,1379,0.085498,38,1,0,1,1
@@ -26716,7 +26715,6 @@ idx,repository,language,architecture,community,continuous_integration,documentat
 1847493,OpenMRS/openmrs-module-xforms,Java,0.958333,1,0,0.588522,6.536232,0.304348,1,24995,0.011071,8,1,1,1,1
 1847500,jgilfelt/android-mapviewballoons,Java,0.857143,1,0,0.224666,2.411765,0.588235,1,987,0.0,893,0,0,1,1
 1847515,mezzoblue/Elevation,Java,0.0,0,0,0.230655,0.0,0.0,1,1034,0.0,41,0,0,1,0
-1847519,android/platform_frameworks_base,Java,0.988724,92,0,0.1501,96.314285,0.828571,1,3917043,0.018677,4115,1,1,1,1
 1847528,sbastn/com.happyprog.tdgotchi,Java,0.970588,0,0,0.03,0.0,0.0,0,1261,0.490519,121,0,0,1,0
 1847533,johnkil/SideNavigation,Java,0.666667,1,0,0.269468,2.529412,1.117647,1,2168,0.0,323,0,1,1,1
 1847554,wrml/wrml,Java,0.955446,1,0,0.241138,1.740741,0.037037,1,79291,0.121922,13,0,0,1,1
@@ -27216,7 +27214,6 @@ idx,repository,language,architecture,community,continuous_integration,documentat
 1852354,apache/poi,Java,0.98245,4,0,0.314638,13.643836,0.10274,1,373847,0.294728,135,1,1,1,1
 1852360,voldemort/voldemort,Java,0.988304,14,0,0.18716,47.93243,3.337838,1,181968,0.233486,1638,1,1,1,1
 1852367,resthub/resthub-spring-stack,Java,0.870968,4,1,0.142075,11.5,6.65,1,8432,0.454964,120,1,1,1,1
-1852377,elasticsearch/elasticsearch,Java,0.987744,14,1,0.225778,372.409851,166.459015,1,452656,0.326213,15698,1,1,1,1
 1852390,plutext/docx4j,Java,0.991821,1,0,0.440149,29.204544,2.931818,1,362751,0.037839,448,1,1,1,1
 1852407,essentials/Essentials,Java,0.994962,7,1,0.083022,113.022728,17.568182,1,49117,0.015434,469,1,1,1,1
 1852409,tavendo/AutobahnAndroid,Java,0.974359,3,0,0.343974,4.257143,1.971429,1,4163,0.0,624,1,1,1,1
