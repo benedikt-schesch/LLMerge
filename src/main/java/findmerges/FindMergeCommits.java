@@ -16,9 +16,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -42,6 +44,7 @@ import org.kohsuke.github.GitHub;
 import org.kohsuke.github.GitHubBuilder;
 import org.plumelib.util.StringsPlume;
 import me.tongfei.progressbar.ProgressBar;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -81,7 +84,7 @@ public class FindMergeCommits {
 
   /** The JGit credentials provider. */
   final CredentialsProvider credentialsProvider;
-
+  
   /**
    * Outputs a list of merge commits from the given repositories.
    *
@@ -327,9 +330,6 @@ public class FindMergeCommits {
     FileRepository repo = new FileRepository(repoDirFile);
 
     makeBranchesForPullRequests(git);
-    AtomicInteger idx = new AtomicInteger(1);
-
-    boolean fileExists = Files.exists(outputPath);
     
     try (BufferedWriter writer = fileExists ? 
          Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8, 
@@ -362,16 +362,35 @@ public class FindMergeCommits {
       Git git, FileRepository repo, String orgName, String repoName, BufferedWriter writer, AtomicInteger idx)
       throws IOException, GitAPIException {
 
-    List<Ref> branches = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
+    // Create a unique key for this repo to use in caching
+    String repoKey = orgName + "/" + repoName;
     
-    // Sort branches deterministically by name before removing duplicates
-    // to ensure the same branch is kept regardless of original order
-    branches.sort(Comparator.comparing(Ref::getName));
+    // Cache for branches in this repository
+    Map<String, List<Ref>> branchCache = new HashMap<>();
     
-    branches = withoutDuplicateBranches(branches);
-    
-    System.out.println("Found " + branches.size() + " unique branches in repository " + orgName + "/" + repoName);
+    List<Ref> branches;
+    // Check if we have cached branches for this repo
+    if (branchCache.containsKey(repoKey)) {
+      branches = branchCache.get(repoKey);
+      System.out.println("Using cached branches for repository " + repoKey);
+    } else {
+      branches = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
+      
+      // Sort branches deterministically by name before removing duplicates
+      // to ensure the same branch is kept regardless of original order
+      branches.sort(Comparator.comparing(Ref::getName));
+      
+      branches = withoutDuplicateBranches(branches);
+      
+      // Cache the branches for future use
+      branchCache.put(repoKey, branches);
+      
+      System.out.println("Found and cached " + branches.size() + " unique branches in repository " + repoKey);
+    }
 
+    // Cache for merge commits per branch
+    Map<String, List<RevCommit>> mergeCommitCache = new HashMap<>();
+    
     // No parallel streaming; track total merges so far and stop after max merge commits
     int mergesSoFar = 0;
     Random random = new Random(RANDOM_SEED);
@@ -385,7 +404,7 @@ public class FindMergeCommits {
       }
       System.out.println("Processing branch " + branchCount + "/" + branches.size() + ": " + branch.getName());
       mergesSoFar = writeMergeCommitsForBranch(
-          git, repo, branch, writer, idx, mergesSoFar, random);
+          git, repo, branch, writer, idx, mergesSoFar, random, mergeCommitCache);
     }
   }
 
@@ -400,6 +419,7 @@ public class FindMergeCommits {
    * @param idx atomic counter for numbering merges
    * @param mergesSoFar how many merges have been written so far (across all branches)
    * @param random the Random instance (seeded) for reproducibility
+   * @param mergeCommitCache cache of merge commits per branch
    * @return updated mergesSoFar
    * @throws IOException if there is trouble reading or writing files
    * @throws GitAPIException if there is trouble running Git commands
@@ -411,7 +431,8 @@ public class FindMergeCommits {
       BufferedWriter writer,
       AtomicInteger idx,
       int mergesSoFar,
-      Random random)
+      Random random,
+      Map<String, List<RevCommit>> mergeCommitCache)
       throws IOException, GitAPIException {
 
     ObjectId branchId = branch.getObjectId();
@@ -419,23 +440,38 @@ public class FindMergeCommits {
       throw new Error("no ObjectId for " + branch);
     }
 
-    // Collect merges from this branch
-    List<RevCommit> mergeCommits = new ArrayList<>();
-    Iterable<RevCommit> commits = git.log().add(branchId).call();
-    for (RevCommit commit : commits) {
-      if (commit.getParentCount() == 2) {
-        mergeCommits.add(commit);
-      }
-    }
+    // Create a unique key for this branch
+    String branchKey = branch.getName();
 
-    // Sort the list deterministically before shuffling to ensure consistent results
-    // across different runs with the same seed, regardless of initial collection order
-    mergeCommits.sort(Comparator.comparing(commit -> commit.getId().getName()));
+    // Collect merges from this branch, using cache if available
+    List<RevCommit> mergeCommits;
+    if (mergeCommitCache.containsKey(branchKey)) {
+      mergeCommits = mergeCommitCache.get(branchKey);
+      System.out.println("Using cached merge commits for branch " + branchKey);
+    } else {
+      mergeCommits = new ArrayList<>();
+      Iterable<RevCommit> commits = git.log().add(branchId).call();
+      for (RevCommit commit : commits) {
+        if (commit.getParentCount() == 2) {
+          mergeCommits.add(commit);
+        }
+      }
+
+      // Sort the list deterministically before shuffling to ensure consistent results
+      // across different runs with the same seed, regardless of initial collection order
+      mergeCommits.sort(Comparator.comparing(commit -> commit.getId().getName()));
+      
+      // Cache the merge commits for this branch
+      mergeCommitCache.put(branchKey, new ArrayList<>(mergeCommits));
+      System.out.println("Cached " + mergeCommits.size() + " merge commits for branch " + branchKey);
+    }
     
     // If mergesSoFar + mergesInBranch exceeds the cap, randomly select only enough merges.
     // The random selection is still deterministic because we use a fixed seed
     int maxAllowedForThisBranch = MAX_TOTAL_MERGE_COMMITS - mergesSoFar;
     if (mergeCommits.size() > maxAllowedForThisBranch) {
+      // Create a copy of the cached list before shuffling to preserve the cache
+      mergeCommits = new ArrayList<>(mergeCommits);
       Collections.shuffle(mergeCommits, random);
       mergeCommits = mergeCommits.subList(0, maxAllowedForThisBranch);
     }
