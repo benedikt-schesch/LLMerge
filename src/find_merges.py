@@ -132,6 +132,59 @@ def get_merge_base(repo: Repo, c1: Commit, c2: Commit) -> Optional[Commit]:
     return None if not common_prefix else h1[common_prefix - 1]
 
 
+def get_commits_for_branch(repo: Repo, branch_ref, repo_slug: str) -> List:
+    """
+    Retrieve and cache the list of commits for the given branch reference.
+
+    This function caches the result of list(repo.iter_commits(branch_ref.path)) by
+    storing the commit hexshas in a CSV file. On subsequent calls, it will load
+    the commit hexshas from the cache and reconstitute the commit objects.
+
+    Arguments:
+        repo: Repo
+            A GitPython Repo object.
+        branch_ref: Reference
+            A GitPython Reference object for the branch.
+        repo_slug: str
+            The repository identifier (org/repo).
+
+    Returns:
+        List[Commit]
+            A list of GitPython Commit objects for the branch.
+    """
+    # Compute a short hash for the branch reference to avoid excessively long filenames.
+    branch_hash = hashlib.md5(branch_ref.path.encode("utf-8")).hexdigest()
+    commit_cache_file = (
+        CACHE_DIR / f"{repo_slug.replace('/', '_')}_{branch_hash}_commits.csv"
+    )
+
+    try:
+        if commit_cache_file.exists():
+            try:
+                df_commits = pd.read_csv(commit_cache_file)
+                commit_hexshas = df_commits["commit_hexsha"].tolist()
+                commits = [repo.commit(sha) for sha in commit_hexshas]
+            except Exception as e:
+                logger.error(
+                    f"Error reading commit cache file {commit_cache_file}: {e}"
+                )
+                commits = list(repo.iter_commits(branch_ref.path))
+        else:
+            commits = list(repo.iter_commits(branch_ref.path))
+            try:
+                df_commits = pd.DataFrame(
+                    {"commit_hexsha": [c.hexsha for c in commits]}
+                )
+                df_commits.to_csv(commit_cache_file, index=False)
+            except Exception as e:
+                logger.error(
+                    f"Error writing commit cache file {commit_cache_file}: {e}"
+                )
+        return commits
+    except GitCommandError:
+        return []
+
+
 def collect_branch_merges(  # pylint: disable=too-many-locals
     repo: Repo, branch_ref, repo_slug: str, written_shas: Set[str]
 ) -> List[Dict[str, str]]:
@@ -139,6 +192,9 @@ def collect_branch_merges(  # pylint: disable=too-many-locals
     For the given branch reference, find all 2-parent merge commits.
     Returns a list of CSV rows (without an index) for the branch.
     Columns: repository, branch_name, merge_commit, parent_1, parent_2, notes
+
+    This function uses get_commits_for_branch() to cache and retrieve the list
+    of commits for the branch.
 
     Arguments:
         repo: Repo
@@ -154,24 +210,9 @@ def collect_branch_merges(  # pylint: disable=too-many-locals
         List[Dict[str, str]]
             A list of CSV rows for the branch.
     """
-    # Compute a short hash for the branch reference to avoid excessively long filenames.
-    branch_hash = hashlib.md5(branch_ref.path.encode("utf-8")).hexdigest()
-    cache_file = CACHE_DIR / f"{repo_slug.replace('/', '_')}_{branch_hash}.csv"
-    if cache_file.exists():
-        try:
-            cached_df = pd.read_csv(cache_file)
-            cached_rows = cached_df.to_dict(orient="records")
-            for row in cached_rows:
-                written_shas.add(row["merge_commit"])
-            return cached_rows  # type: ignore
-        except Exception as e:
-            logger.error(f"Error reading cache file {cache_file}: {e}")
-
     rows: List[Dict[str, str]] = []
-    try:
-        commits = list(repo.iter_commits(branch_ref.path))
-    except GitCommandError:
-        return rows
+    commits = get_commits_for_branch(repo, branch_ref, repo_slug)
+
     for commit in commits:
         if len(commit.parents) == 2:
             if commit.hexsha in written_shas:
@@ -194,12 +235,6 @@ def collect_branch_merges(  # pylint: disable=too-many-locals
                 "notes": notes,
             }
             rows.append(info)
-    # Write results to cache
-    try:
-        df_cache = pd.DataFrame(rows)
-        df_cache.to_csv(cache_file, index=False)
-    except Exception as e:
-        logger.error(f"Error writing cache file {cache_file}: {e}")
     return rows
 
 
