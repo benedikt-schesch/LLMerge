@@ -89,7 +89,7 @@ public class FindMergeCommits {
 
   /** The JGit credentials provider. */
   final CredentialsProvider credentialsProvider;
-  
+
   /**
    * Outputs a list of merge commits from the given repositories.
    *
@@ -283,11 +283,11 @@ public class FindMergeCommits {
     orgOutputDir.toFile().mkdirs();
     File outputFile = new File(orgOutputDir.toFile(), repoName + ".csv");
     Path outputPath = outputFile.toPath();
-    
+
     // Check if the file exists and if it has enough entries
     AtomicInteger idx = new AtomicInteger(1);
     boolean fileExists = Files.exists(outputPath);
-    
+
     if (fileExists) {
       try (Stream<String> lines = Files.lines(outputPath)) {
         long lineCount = lines.count();
@@ -298,7 +298,7 @@ public class FindMergeCommits {
             System.out.println("Output file already has " + existingEntries + " entries, which is enough. Skipping " + orgAndRepo);
             return;
           }
-          System.out.println("Output file has " + existingEntries + " entries, but need " + MAX_TOTAL_MERGE_COMMITS + 
+          System.out.println("Output file has " + existingEntries + " entries, but need " + MAX_TOTAL_MERGE_COMMITS +
                             ". Computing more for " + orgAndRepo);
           // Set the index to continue from the last entry
           idx.set(existingEntries + 1);
@@ -335,12 +335,12 @@ public class FindMergeCommits {
     FileRepository repo = new FileRepository(repoDirFile);
 
     makeBranchesForPullRequests(git);
-    
-    try (BufferedWriter writer = fileExists ? 
-         Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8, 
-                                java.nio.file.StandardOpenOption.APPEND) : 
+
+    try (BufferedWriter writer = fileExists ?
+         Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8,
+                                java.nio.file.StandardOpenOption.APPEND) :
          Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8)) {
-         
+
       // Write the CSV header only for new files
       if (!fileExists) {
         writer.write("branch_name,merge_commit,parent_1,parent_2,notes");
@@ -356,9 +356,10 @@ public class FindMergeCommits {
    * since RevCommit itself is not serializable.
    */
   static class SerializableMergeCommit implements Serializable {
+    private static final long serialVersionUID = 1L;
     private final String id;
     private final String[] parentIds;
-    
+
     public SerializableMergeCommit(RevCommit commit) {
       this.id = commit.getId().getName();
       this.parentIds = new String[commit.getParentCount()];
@@ -366,19 +367,19 @@ public class FindMergeCommits {
         this.parentIds[i] = commit.getParent(i).getId().getName();
       }
     }
-    
+
     public String getId() {
       return id;
     }
-    
+
     public String[] getParentIds() {
       return parentIds;
     }
   }
-  
+
   /**
    * Saves the merge commit cache to disk for future use.
-   * 
+   *
    * @param mergeCommitCache the cache to save
    * @param orgName the organization name
    * @param repoName the repository name
@@ -387,7 +388,7 @@ public class FindMergeCommits {
   private void saveMergeCommitCache(Map<String, List<RevCommit>> mergeCommitCache, String orgName, String repoName) throws IOException {
     String cacheDir = "cache";
     new File(cacheDir).mkdirs();
-    
+
     // Convert RevCommit objects to SerializableMergeCommit objects
     Map<String, List<SerializableMergeCommit>> serializableCache = new HashMap<>();
     for (Map.Entry<String, List<RevCommit>> entry : mergeCommitCache.entrySet()) {
@@ -397,19 +398,19 @@ public class FindMergeCommits {
       }
       serializableCache.put(entry.getKey(), serializableCommits);
     }
-    
+
     // Create a cache file path
     String cacheFileName = cacheDir + "/" + orgName + "_" + repoName + "_merge_cache.ser";
-    
+
     try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(cacheFileName))) {
       oos.writeObject(serializableCache);
       System.out.println("Saved merge commit cache to " + cacheFileName);
     }
   }
-  
+
   /**
    * Loads the merge commit cache from disk if available.
-   * 
+   *
    * @param orgName the organization name
    * @param repoName the repository name
    * @param repository the JGit repository to resolve commit IDs
@@ -419,18 +420,18 @@ public class FindMergeCommits {
   private Map<String, List<RevCommit>> loadMergeCommitCache(String orgName, String repoName, Repository repository) {
     String cacheFileName = "cache/" + orgName + "_" + repoName + "_merge_cache.ser";
     File cacheFile = new File(cacheFileName);
-    
+
     if (!cacheFile.exists()) {
-      return null;
+      return new HashMap<>();
     }
-    
+
     try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(cacheFile))) {
-      Map<String, List<SerializableMergeCommit>> serializableCache = 
+      Map<String, List<SerializableMergeCommit>> serializableCache =
           (Map<String, List<SerializableMergeCommit>>) ois.readObject();
-      
+
       // Convert SerializableMergeCommit objects back to RevCommit objects
       Map<String, List<RevCommit>> mergeCommitCache = new HashMap<>();
-      
+
       try (RevWalk revWalk = new RevWalk(repository)) {
         for (Map.Entry<String, List<SerializableMergeCommit>> entry : serializableCache.entrySet()) {
           List<RevCommit> commits = new ArrayList<>();
@@ -442,7 +443,7 @@ public class FindMergeCommits {
           mergeCommitCache.put(entry.getKey(), commits);
         }
       }
-      
+
       System.out.println("Loaded merge commit cache from " + cacheFileName);
       return mergeCommitCache;
     } catch (Exception e) {
@@ -469,10 +470,10 @@ public class FindMergeCommits {
 
     // Create a unique key for this repo to use in caching
     String repoKey = orgName + "/" + repoName;
-    
+
     // Cache for branches in this repository
     Map<String, List<Ref>> branchCache = new HashMap<>();
-    
+
     List<Ref> branches;
     // Check if we have cached branches for this repo
     if (branchCache.containsKey(repoKey)) {
@@ -480,27 +481,22 @@ public class FindMergeCommits {
       System.out.println("Using cached branches for repository " + repoKey);
     } else {
       branches = git.branchList().setListMode(ListBranchCommand.ListMode.ALL).call();
-      
+
       // Sort branches deterministically by name before removing duplicates
       // to ensure the same branch is kept regardless of original order
       branches.sort(Comparator.comparing(Ref::getName));
-      
+
       branches = withoutDuplicateBranches(branches);
-      
+
       // Cache the branches for future use
       branchCache.put(repoKey, branches);
-      
+
       System.out.println("Found and cached " + branches.size() + " unique branches in repository " + repoKey);
     }
 
     // Try to load merge commit cache from disk
     Map<String, List<RevCommit>> mergeCommitCache = loadMergeCommitCache(orgName, repoName, repo);
-    
-    // If cache wasn't loaded, create a new empty cache
-    if (mergeCommitCache == null) {
-      mergeCommitCache = new HashMap<>();
-    }
-    
+
     // No parallel streaming; track total merges so far and stop after max merge commits
     int mergesSoFar = 0;
     Random random = new Random(RANDOM_SEED);
@@ -516,7 +512,7 @@ public class FindMergeCommits {
       mergesSoFar = writeMergeCommitsForBranch(
           git, repo, branch, writer, idx, mergesSoFar, random, mergeCommitCache);
     }
-    
+
     // Save the merge commit cache to disk when we're done
     try {
       saveMergeCommitCache(mergeCommitCache, orgName, repoName);
@@ -577,29 +573,34 @@ public class FindMergeCommits {
       // Sort the list deterministically before shuffling to ensure consistent results
       // across different runs with the same seed, regardless of initial collection order
       mergeCommits.sort(Comparator.comparing(commit -> commit.getId().getName()));
-      
+
       // Cache the merge commits for this branch
       mergeCommitCache.put(branchKey, new ArrayList<>(mergeCommits));
       System.out.println("Cached " + mergeCommits.size() + " merge commits for branch " + branchKey);
-      
+
       // Since we've added data to the cache, update the on-disk cache as well
       try {
         // Extract org and repo name from the repo directory path
-        String repoPath = repo.getDirectory().getParentFile().getAbsolutePath();
-        int lastSlashPos = repoPath.lastIndexOf('/');
-        if (lastSlashPos > 0) {
-          String repoName = repoPath.substring(lastSlashPos + 1);
-          int secondLastSlashPos = repoPath.substring(0, lastSlashPos).lastIndexOf('/');
-          if (secondLastSlashPos > 0) {
-            String orgName = repoPath.substring(secondLastSlashPos + 1, lastSlashPos);
-            saveMergeCommitCache(mergeCommitCache, orgName, repoName);
+        File repoDirectory = repo.getDirectory().getParentFile();
+        String repoPath = repoDirectory.getAbsolutePath();
+
+        Path path = Paths.get(repoPath);
+        int nameCount = path.getNameCount();
+
+        if (nameCount >= 2) { // Ensure there are at least two path components
+              String repoName = path.getFileName().toString();
+              String orgName = path.getName(nameCount - 2).toString();
+
+              saveMergeCommitCache(mergeCommitCache, orgName, repoName);
+          } else {
+              System.err.println("Error: Unable to determine organization and repository name from path: " + repoPath);
           }
-        }
       } catch (Exception e) {
-        System.err.println("Error updating merge commit cache: " + e.getMessage());
+          System.err.println("Error updating merge commit cache:");
+          e.printStackTrace();
       }
     }
-    
+
     // If mergesSoFar + mergesInBranch exceeds the cap, randomly select only enough merges.
     // The random selection is still deterministic because we use a fixed seed
     int maxAllowedForThisBranch = MAX_TOTAL_MERGE_COMMITS - mergesSoFar;
