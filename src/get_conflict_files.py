@@ -109,7 +109,7 @@ def copy_conflicting_files_and_goal(
     return conflicts
 
 
-def reproduce_merge_and_extract_conflicts(  # pylint: disable=too-many-branches, too-many-statements
+def reproduce_merge_and_extract_conflicts(
     repo_slug: str,
     left_sha: str,
     right_sha: str,
@@ -120,12 +120,12 @@ def reproduce_merge_and_extract_conflicts(  # pylint: disable=too-many-branches,
     """
     Checkout left_sha, merge right_sha.
     If conflicts occur, copy conflict-marked files and final merged files to output_dir.
-    Additionally, cache these files under "cache/<merge_sha>" preserving the original
+    Additionally, cache these files under "merge_cache/conflicts" using the original
     filenames. When copying them to output_dir, the files are renamed using merge_id-index.
     If the cache already exists, the cached files are simply copied over.
     Returns the list of conflict IDs for this merge.
     """
-    cache_folder = Path("merge_cache/conflicts") / merge_sha
+    cache_folder = Path("merge_cache/conflicts") / repo_slug / merge_sha
     conflict_cache_folder = cache_folder / "conflict"
     final_cache_folder = cache_folder / "final_merged"
 
@@ -150,6 +150,7 @@ def reproduce_merge_and_extract_conflicts(  # pylint: disable=too-many-branches,
         return conflicts
 
     # No cache exists, so reproduce the merge.
+    logger.info(f"Reproducing merge {merge_sha} for {repo_slug}")
     repo = get_repo(repo_slug)
     temp_dir = WORKING_DIR / f"{repo_slug}_merge_{merge_id}"
     shutil.copytree(repo.working_dir, temp_dir, dirs_exist_ok=True)
@@ -158,22 +159,21 @@ def reproduce_merge_and_extract_conflicts(  # pylint: disable=too-many-branches,
     conflict_files: List[Path] = []
     try:
         repo.git.merge(right_sha)
-    except GitCommandError as e:
+    except GitCommandError:
         status_output = repo.git.status("--porcelain")
         for line in status_output.splitlines():
             if line.startswith("UU "):
                 path_part = line[3:].strip()
                 if path_part.endswith(".java"):
                     conflict_files.append(Path(path_part))
-        if conflict_files:
-            logger.info(
-                f"Conflict in {left_sha} + {right_sha} => {merge_sha}, files: {conflict_files}"
-            )
-        else:
-            logger.warning(f"Git error. {e}")
+    conflict_cache_folder.mkdir(parents=True, exist_ok=True)
+    final_cache_folder.mkdir(parents=True, exist_ok=True)
 
     result: List[str] = []
     if conflict_files:
+        logger.info(
+            f"Conflict in {left_sha} + {right_sha} => {merge_sha}, files: {conflict_files}"
+        )
         conflict_files.sort()
         result = copy_conflicting_files_and_goal(
             conflict_files=conflict_files,
@@ -182,9 +182,6 @@ def reproduce_merge_and_extract_conflicts(  # pylint: disable=too-many-branches,
             output_dir=output_dir,
             merge_id=merge_id,
         )
-        # Cache the files while preserving the original filenames.
-        conflict_cache_folder.mkdir(parents=True, exist_ok=True)
-        final_cache_folder.mkdir(parents=True, exist_ok=True)
         for i, conflict_file in enumerate(conflict_files):
             conflict_id = f"{merge_id}-{i}"
             original_name = conflict_file.name
@@ -245,12 +242,12 @@ def main():
     parser = argparse.ArgumentParser(description="Extract conflict files from merges.")
     parser.add_argument(
         "--repos",
-        default="input_data/repos_small.csv",
+        default="input_data/repos_reaper_100.csv",
         help="CSV with merges (org/repo, merge_commit, parent_1, parent_2)",
     )
     parser.add_argument(
         "--output_dir",
-        default="merges/repos_small",
+        default="merges/repos_reaper_100",
         help="Directory to store conflict files",
     )
     parser.add_argument(
@@ -297,9 +294,9 @@ def main():
     all_merges_df.to_csv(output_dir / "all_merges.csv")
     logger.info(f"Found {len(all_merges_df)} merges in total.")
 
-    # Make sure "merge_commit" is unique
-    if len(all_merges_df["merge_commit"].unique()) != len(all_merges_df):
-        logger.error("Merge commits are not unique.")
+    # Make sure merge_commit is unique
+    if all_merges_df[["repository", "merge_commit"]].duplicated().any():
+        logger.error("Duplicate merge_commit found in all_merges.csv")
         sys.exit(1)
 
     # STEP 2: Process each merge in parallel to extract conflict files
@@ -333,7 +330,7 @@ def main():
                 progress.advance(progress_task)
 
     # Combine all results
-    all_merges_df = all_merges_df[all_merges_df["conflicts"]]
+    all_merges_df = all_merges_df[all_merges_df["conflicts"] != ""]  # pylint: disable=C1804
     all_merges_df.to_csv(output_dir / "conflict_files.csv")
 
     logger.info("Done extracting conflict files.")

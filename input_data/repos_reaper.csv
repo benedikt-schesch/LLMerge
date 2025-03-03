@@ -1290,7 +1290,6 @@ idx,repository,language,architecture,community,continuous_integration,documentat
 149350,lokii/GLRecorder,Java,0.928571,0,0,0.392491,0.0,0.0,1,1289,0.0,9,0,0,1,0
 149398,eugenkiss/chanobol,Java,0.852941,1,0,0.028738,72.0,59.0,1,20478,0.0,38,0,1,1,1
 149407,pagrus7/java-for-rockstars,Java,1.0,1,0,0.031812,5.8,0.0,0,723,0.0,10,0,0,1,0
-149458,wasabeef/RecyclerViewAnimators,Java,0.892857,2,1,0.195064,0.0,0.0,1,1907,0.0,2818,0,0,1,1
 149479,BuiltBrokenModding/ICBM,Java,0.980769,2,1,0.068422,69.5,10.25,1,23634,0.002486,40,1,1,1,1
 149624,SiegenthalerSolutions/spotify-web-api-android,Java,0.965517,1,0,0.506563,0.0,0.0,1,1932,0.0,7,0,0,1,0
 149724,linfaxin/RoundedUI,Java,0.75,2,0,0.032997,0.0,0.0,1,1146,0.0,14,0,0,1,0
