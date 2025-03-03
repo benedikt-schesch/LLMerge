@@ -19,7 +19,7 @@ SYSTEM_PROMPT = (
 QUERY_PROMPT = (
     "You are a semantic merge conflict resolution expert. Below is a snippet of code "
     "with surrounding context that includes a merge conflict.\n"
-    "Return the entire snippet (including full context) in markdown code fences as provided, make sure you do not modify the context at all and preserve the spacing as is.\n"
+    "Return the entire snippet (including full context) in markdown code syntax as provided, make sure you do not modify the context at all and preserve the spacing as is.\n"
     "Think in terms of intent and semantics that both sides of the merge are trying to achieve.\n"
     "If you are not sure on how to resolve the conflict or if the intent is ambiguous, please return the same snippet with the conflict.\n"
     "Here is the code snippet:\n"
