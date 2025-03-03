@@ -1,2 +1,2 @@
-branch_name,merge_commit,parent_1,parent_2,notes
-1,refs/heads/master,19e92b4d4cc2a7b61a672943a7d78df79b72923b,603d86b3d4cd18cf45a8877e0c219ec9c8e6218b,821ec96b814e2fbe3a2c488e670c4aecf1ff129a,
+merge_idx,repository,branch_name,merge_commit,parent_1,parent_2,notes
+0,timesheetIO/Android-API,refs/heads/master,19e92b4d4cc2a7b61a672943a7d78df79b72923b,603d86b3d4cd18cf45a8877e0c219ec9c8e6218b,821ec96b814e2fbe3a2c488e670c4aecf1ff129a,

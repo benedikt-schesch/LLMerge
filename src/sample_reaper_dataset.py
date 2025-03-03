@@ -34,7 +34,7 @@ def filter_top_n_repos(input_path, n):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Filter top N repositories by stars.")
     parser.add_argument(
-        "--n", type=int, default=100, help="Number of top repositories to select."
+        "--n", type=int, default=1000, help="Number of top repositories to select."
     )
     parser.add_argument(
         "--input_path",

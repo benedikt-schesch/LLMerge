@@ -63,6 +63,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+merge_cache
 
 # Installer logs
 pip-log.txt

@@ -8,9 +8,11 @@ Usage:
         --output_dir path/to/conflict_files \
         --n_threads 8
 
-Modified to process each merge (row) in parallel rather than each repository in parallel
-to reduce heat imbalance. Each merge commit is one task in the thread pool.
-Output files are now named as:
+Modified to use a two-step process:
+1. Collect all merges in parallel (one task per repository)
+2. Process conflict files in parallel (one task per merge)
+
+Output files are named as:
     merge_id + letter .conflict
     merge_id + letter .final_merged
 and a new CSV is dumped mapping each merge (using its merge_id) to the comma-separated
@@ -18,9 +20,9 @@ list of conflict file IDs.
 """
 
 import argparse
-import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
+import sys
 import shutil
 from pathlib import Path
 from typing import List
@@ -70,18 +72,17 @@ def copy_conflicting_files_and_goal(
     final_commit_sha: str,
     output_dir: Path,
     merge_id: int,
-    repo_idx: int,
 ) -> List[str]:
     """
-    Copy conflict-marked files from the merge_repo working tree, and also
+    Copy conflict-marked files from the repo working tree, and also
     copy the final merged ("goal") file from the real merged commit.
-    Instead of writing under org/repo_name, files are written directly into output_dir
-    using names: merge_id + letter (e.g. "1a.conflict", "1a.final_merged").
-    Returns the list of conflict IDs (e.g. ["1a", "1b", ...]) for this merge.
+    Files are written into output_dir with names: merge_id-index.conflict
+    and merge_id-index.final_merged.
+    Returns the list of conflict IDs (e.g. ["1-0", "1-1", ...]) for this merge.
     """
     conflicts: List[str] = []
     for conflict_num, conflict_file in enumerate(conflict_files):
-        conflict_id = f"{repo_idx}-{merge_id}-{conflict_num}"
+        conflict_id = f"{merge_id}-{conflict_num}"
 
         # 1) conflict-marked file from local working tree
         conflict_file_path = Path(final_repo.working_dir) / conflict_file
@@ -108,23 +109,51 @@ def copy_conflicting_files_and_goal(
     return conflicts
 
 
-def reproduce_merge_and_extract_conflicts(
-    repo: Repo,
+def reproduce_merge_and_extract_conflicts(  # pylint: disable=too-many-branches, too-many-statements
+    repo_slug: str,
     left_sha: str,
     right_sha: str,
     merge_sha: str,
     output_dir: Path,
-    repo_idx: int,
     merge_id: int,
 ) -> List[str]:
     """
-    Checkout parent1, merge parent2.
-    If conflict, copy conflict-marked files and final merged files to output_dir.
+    Checkout left_sha, merge right_sha.
+    If conflicts occur, copy conflict-marked files and final merged files to output_dir.
+    Additionally, cache these files under "cache/<merge_sha>" preserving the original
+    filenames. When copying them to output_dir, the files are renamed using merge_id-index.
+    If the cache already exists, the cached files are simply copied over.
     Returns the list of conflict IDs for this merge.
-
-    When use_existing_clone=True the function assumes that the repo passed in is already
-    a clone (a working copy) so it does not clone it again.
     """
+    cache_folder = Path("merge_cache/conflicts") / merge_sha
+    conflict_cache_folder = cache_folder / "conflict"
+    final_cache_folder = cache_folder / "final_merged"
+
+    # Check if cache exists (both subdirectories must be present)
+    if conflict_cache_folder.exists() and final_cache_folder.exists():
+        logger.info(f"Using cached merge for {merge_sha} from {cache_folder}")
+        cached_conflict_files = sorted(
+            conflict_cache_folder.iterdir(), key=lambda p: p.name
+        )
+        conflicts = []
+        for i, cached_file in enumerate(cached_conflict_files):
+            conflict_id = f"{merge_id}-{i}"
+            destination_conflict = output_dir / f"{conflict_id}.conflict"
+            destination_final = output_dir / f"{conflict_id}.final_merged"
+            destination_conflict.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(cached_file, destination_conflict)
+            # Look for corresponding final merged file using the same original filename
+            final_file = final_cache_folder / cached_file.name
+            if final_file.is_file():
+                shutil.copy2(final_file, destination_final)
+            conflicts.append(conflict_id)
+        return conflicts
+
+    # No cache exists, so reproduce the merge.
+    repo = get_repo(repo_slug)
+    temp_dir = WORKING_DIR / f"{repo_slug}_merge_{merge_id}"
+    shutil.copytree(repo.working_dir, temp_dir, dirs_exist_ok=True)
+    repo = Repo(temp_dir)
     repo.git.checkout(left_sha, force=True)
     conflict_files: List[Path] = []
     try:
@@ -138,11 +167,11 @@ def reproduce_merge_and_extract_conflicts(
                     conflict_files.append(Path(path_part))
         if conflict_files:
             logger.info(
-                f"Conflict in {left_sha} + {right_sha} "
-                f"=> {merge_sha}, files: {conflict_files}"
+                f"Conflict in {left_sha} + {right_sha} => {merge_sha}, files: {conflict_files}"
             )
         else:
             logger.warning(f"Git error. {e}")
+
     result: List[str] = []
     if conflict_files:
         conflict_files.sort()
@@ -152,100 +181,67 @@ def reproduce_merge_and_extract_conflicts(
             final_commit_sha=merge_sha,
             output_dir=output_dir,
             merge_id=merge_id,
-            repo_idx=repo_idx,
         )
+        # Cache the files while preserving the original filenames.
+        conflict_cache_folder.mkdir(parents=True, exist_ok=True)
+        final_cache_folder.mkdir(parents=True, exist_ok=True)
+        for i, conflict_file in enumerate(conflict_files):
+            conflict_id = f"{merge_id}-{i}"
+            original_name = conflict_file.name
+            # Cache conflict-marked file
+            src_conflict = output_dir / f"{conflict_id}.conflict"
+            dst_conflict = conflict_cache_folder / original_name
+            if src_conflict.is_file():
+                shutil.copy2(src_conflict, dst_conflict)
+            # Cache final merged file
+            src_final = output_dir / f"{conflict_id}.final_merged"
+            dst_final = final_cache_folder / original_name
+            if src_final.is_file():
+                shutil.copy2(src_final, dst_final)
+    shutil.rmtree(temp_dir, ignore_errors=True)
     return result
 
 
-def process_single_repo(repo_slug: str, repo_idx: int, output_dir: Path):
+def collect_merges(repo_slug: str, output_dir: Path) -> pd.DataFrame:
     """
-    Worker function to handle all merges for one repository.
-    Uses a cache (a CSV file) that records, for each merge,
-    the conflict IDs (as a semicolon-separated string) produced by
-    reproduce_merge_and_extract_conflicts.
-
-    Before reprocessing a merge, it checks that for each conflict ID, both the conflict-marked file
-    and final merged file exist. If they do, processing is skipped.
-    At the end the cache is saved.
-
-    This version first gets the merges (first-level task) and then processes
-    each merge (second-level task)in parallel.
-    For efficiency, it clones the repository only once (the base clone) and
-    then for each merge, it copies the base clone to run the merge reproduction.
+    Step 1: Collect merges for a single repository.
     """
-    # Determine cache file name (one per repository)
-    cache_file = output_dir / f"conflict_files/cache/{repo_slug}_line_conflicts.csv"
-    if cache_file.exists():
-        cache_df = pd.read_csv(cache_file)
-        # Check cache: if a row exists and the conflict files are present, skip processing
-        all_exist = True
-        for idx, _ in cache_df.iterrows():
-            if idx in cache_df.index:
-                cached_row = cache_df.loc[idx]  # type: ignore
-                cached_conflicts = cached_row["conflicts"]
-                if pd.isna(cached_conflicts):
-                    continue
-                # Expecting conflict IDs to be stored as semicolon-separated string, e.g. "1a;1b"
-                conflict_ids = [
-                    cid.strip() for cid in cached_conflicts.split(";") if cid.strip()
-                ]
-                for cid in conflict_ids:
-                    conflict_file = output_dir / f"conflict_files/{cid}.conflict"
-                    if not conflict_file.exists():
-                        all_exist = False
-                        break
-        if all_exist:
-            logger.info(f"Skipping {repo_slug} as all conflicts are already processed.")
-            return cache_df
-
     try:
         repo = get_repo(repo_slug)
+        merges = get_merges(repo, repo_slug, output_dir / "merges")
+        logger.info(f"Collected merges for {repo_slug}")
     except Exception as e:
-        logger.error(f"Error cloning {repo_slug}: {e}")
+        logger.error(f"Error collecting merges for {repo_slug}: {e}")
         return pd.DataFrame()
-    merges = get_merges(repo, repo_slug, output_dir / "merges")
+    return merges
 
-    cache_df = merges.copy()
-    cache_df["conflicts"] = ""
 
-    def process_merge(merge_id, merge_row):
-        temp_dir = WORKING_DIR / f"{repo_slug}_merge_{merge_id}"
-        shutil.copytree(repo.working_dir, temp_dir)
-        temp_repo = Repo(temp_dir)
-        try:
-            conflicts = reproduce_merge_and_extract_conflicts(
-                repo=temp_repo,
-                left_sha=merge_row["parent_1"],
-                right_sha=merge_row["parent_2"],
-                merge_sha=merge_row["merge_commit"],
-                output_dir=output_dir / "conflict_files",
-                repo_idx=repo_idx,
-                merge_id=merge_id,  # type: ignore
-            )
-        except Exception as e:
-            logger.error(
-                f"Error reproducing merge {merge_row['merge_commit']} in {repo_slug}: {e}"
-            )
-            conflicts = []
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        return merge_id, ";".join(conflicts)
-
-    with ThreadPoolExecutor(max_workers=16) as executor:
-        futures = {
-            executor.submit(process_merge, merge_id, merge_row): merge_id
-            for merge_id, merge_row in merges.iterrows()
-        }
-        for future in as_completed(futures):
-            merge_id, conflict_str = future.result()
-            cache_df.at[merge_id, "conflicts"] = conflict_str
-
-    # Save the updated cache
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    cache_df.to_csv(cache_file)
+def process_merge(merge_row, output_dir: Path) -> tuple:
+    """
+    Step 2: Process a single merge to extract conflict files.
+    """
+    repo_slug = merge_row["repository"]
+    merge_id = merge_row.name
+    try:
+        conflicts = reproduce_merge_and_extract_conflicts(
+            repo_slug=repo_slug,
+            left_sha=merge_row["parent_1"],
+            right_sha=merge_row["parent_2"],
+            merge_sha=merge_row["merge_commit"],
+            output_dir=output_dir / "conflict_files",
+            merge_id=merge_id,
+        )
+        conflict_str = ";".join(conflicts)
+        return merge_id, conflict_str
+    except Exception as e:
+        logger.error(
+            f"Error processing merge {merge_row['merge_commit']} in {repo_slug}: {e}"
+        )
+    return merge_id, ""
 
 
 def main():
-    """Main function to extract conflict files from merges."""
+    """Main function with two steps: collect merges, then extract conflict files."""
     parser = argparse.ArgumentParser(description="Extract conflict files from merges.")
     parser.add_argument(
         "--repos",
@@ -261,50 +257,85 @@ def main():
         "--n_threads",
         required=False,
         type=int,
-        default=6,
+        default=None,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "conflict_files/cache").mkdir(parents=True, exist_ok=True)
 
     repos_df = pd.read_csv(args.repos)
-
     num_workers = os.cpu_count() if args.n_threads is None else args.n_threads
-    logger.info(f"Processing {len(repos_df)} repos using {num_workers} threads...")
 
-    def worker(task):
-        row, output_dir = task
-        process_single_repo(
-            repo_slug=row["repository"],
-            repo_idx=row.name,
-            output_dir=output_dir,
-        )
+    # STEP 1: Collect all merges in parallel
+    logger.info(
+        f"Step 1: Collecting merges for {len(repos_df)} repos using {num_workers} threads..."
+    )
 
-    if num_workers is not None and num_workers < 2:
-        for task in [(m[1], output_dir) for m in repos_df.iterrows()]:
-            worker(task)
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
-            tasks = [(m[1], output_dir) for m in repos_df.iterrows()]
-            futures = [executor.submit(worker, task) for task in tasks]
-            with Progress() as progress:
-                progress_task = progress.add_task(
-                    "Extracting conflicts...", total=len(futures)
-                )
-                for f in concurrent.futures.as_completed(futures):
-                    try:
-                        f.result()
-                    except Exception as exc:
-                        logger.error(f"Worker thread raised an exception: {exc}")
-                    progress.advance(progress_task)
-    df = concatenate_csvs(output_dir / "conflict_files/cache")
-    df = df.dropna(subset=["conflicts"])
-    df.drop(columns=["idx"], inplace=True)
-    df.to_csv(output_dir / "conflict_files.csv")
-    df = concatenate_csvs(output_dir / "merges")
-    df.to_csv(output_dir / "all_merges.csv")
+    result = []
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        tasks = [
+            executor.submit(collect_merges, row["repository"], output_dir)
+            for _, row in repos_df.iterrows()
+        ]
+
+        with Progress() as progress:
+            progress_task = progress.add_task("Collecting merges...", total=len(tasks))
+            for future in as_completed(tasks):
+                try:
+                    result.append(future.result())
+                except Exception as exc:
+                    logger.error(f"Worker thread raised an exception: {exc}")
+                progress.advance(progress_task)
+
+    # Combine all merge CSVs
+    all_merges_df = pd.concat(result)
+    all_merges_df["merge_idx"] = range(0, len(all_merges_df))
+    all_merges_df.set_index("merge_idx", inplace=True)
+    all_merges_df.to_csv(output_dir / "all_merges.csv")
+    logger.info(f"Found {len(all_merges_df)} merges in total.")
+
+    # Make sure "merge_commit" is unique
+    if len(all_merges_df["merge_commit"].unique()) != len(all_merges_df):
+        logger.error("Merge commits are not unique.")
+        sys.exit(1)
+
+    # STEP 2: Process each merge in parallel to extract conflict files
+    logger.info(
+        f"Step 2: Processing {len(all_merges_df)} merges for "
+        f"conflicts using {num_workers} threads..."
+    )
+
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {
+            executor.submit(process_merge, merge_row, output_dir): (
+                merge_row.name,
+                merge_row["repository"],
+            )
+            for _, merge_row in all_merges_df.iterrows()
+        }
+
+        with Progress() as progress:
+            progress_task = progress.add_task(
+                "Extracting conflicts...", total=len(futures)
+            )
+            for future in as_completed(futures):
+                try:
+                    merge_id, conflict_str = future.result()
+
+                    all_merges_df.loc[merge_id, "conflicts"] = conflict_str
+
+                except Exception as exc:
+                    logger.error(f"Worker thread raised an exception: {exc}")
+
+                progress.advance(progress_task)
+
+    # Combine all results
+    all_merges_df = all_merges_df[all_merges_df["conflicts"]]
+    all_merges_df.to_csv(output_dir / "conflict_files.csv")
+
     logger.info("Done extracting conflict files.")
 
 

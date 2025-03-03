@@ -7,6 +7,7 @@ KEEP_FLAG=${3:-}  # Optional third argument, e.g. "-keep_trivial_resolution"
 
 # Remove the current logs
 rm run.log
+rm -rf .workdir
 
 python3 src/get_conflict_files.py \
     --repos "$REPOS_DIR" \
