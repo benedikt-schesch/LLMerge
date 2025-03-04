@@ -25,3 +25,9 @@ mv /root/.cache /workspace/.cache && ln -s /workspace/.cache /root/.cache
 apt_maintenance
 pip install --upgrade pip
 pip install uv
+
+cd
+git clone https://github.com/benedikt-schesch/LLMerge.git
+cd LLMerge
+uv sync
+screen
