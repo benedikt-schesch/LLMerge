@@ -179,7 +179,6 @@ if __name__ == "__main__":
         model=model,
         processing_class=tokenizer,
         reward_funcs=[  # type: ignore
-            java_markdown_reward,
             format_reward,
             correctness_reward_func,
         ],
