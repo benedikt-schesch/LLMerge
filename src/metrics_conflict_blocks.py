@@ -38,8 +38,10 @@ import shutil
 import pandas as pd
 from transformers import AutoTokenizer
 from loguru import logger
+from rich.progress import track
 from build_dataset import build_query
 from variables import MODEL, MAX_PROMPT_LENGTH
+
 
 logger.add("run.log", backtrace=True, diagnose=True)
 
@@ -202,7 +204,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
     rows = []
     tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
 
-    for conflict_path in conflict_files:
+    for conflict_path in track(conflict_files):
         # For each .conflict, find the corresponding .resolved_conflict file
         resolved_path = conflict_path.with_suffix(".resolved_conflict")
         if not resolved_path.exists():
@@ -239,18 +241,23 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
         res_in_left = functional_equality(resolution, left_parent)
         res_in_right = functional_equality(resolution, right_parent)
 
+        # Check if the resolution is incoherent (i.e., it is larger than the conflict block)
+        incoherent_resolution_size = len(conflict_lines) + 2 < len(resolved_lines)
+
         # Compute all metrics
         metrics = {
             "full_conflict_lines": len(conflict_lines),
             "context_before_lines": len(before_ctx),
             "conflict_lines": len(conflict_block),
             "context_after_lines": len(after_ctx),
+            "full_resolution_lines": len(resolved_lines),
             "resolution_lines": len(resolution),
             "parent1_lines": len(left_parent),
             "parent2_lines": len(right_parent),
             "base_lines": len(base) if base is not None else -1,
             "num_tokens_query": get_token_count(tokenizer, conflict_lines),
             "resolution_in_left_or_right": (res_in_left or res_in_right),
+            "incoherent_resolution_size": incoherent_resolution_size,
         }
 
         # Decide if this conflict should be selected based on filtering rules
@@ -268,6 +275,9 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
 
         # Skip if token count exceeds the model prompt limit
         if metrics["num_tokens_query"] > MAX_PROMPT_LENGTH:
+            selected = False
+
+        if metrics["incoherent_resolution_size"]:
             selected = False
 
         # Prepare row data
@@ -289,6 +299,7 @@ def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-
 
     logger.info(f"Metrics (with 'selected' column) have been written to {args.csv_out}")
     logger.info(f"Selected conflicts copied to {output_dir}")
+    logger.info(f"Number of selected conflicts: {df['selected'].sum()}")
 
 
 if __name__ == "__main__":
