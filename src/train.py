@@ -15,7 +15,7 @@ os.environ["WANDB_PROJECT"] = "LLMerge"
 
 PatchFastRL("GRPO", FastLanguageModel)
 
-dataset = load_from_disk("merges/repos_50/dataset")
+dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
 CORRECT_REWARD_STRENGTH = 1
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
@@ -167,8 +167,8 @@ if __name__ == "__main__":
         max_completion_length=MAX_SEQ_LENGTH,
         temperature=0.6,
         # num_train_epochs = 1, # Set to 1 for a full training run
-        max_steps=250,
-        save_steps=250,
+        max_steps=1000,
+        save_steps=200,
         max_grad_norm=0.1,
         report_to="wandb",
         output_dir="outputs",
