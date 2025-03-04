@@ -13,6 +13,7 @@ dependencies = [
     "pylint>=3.3.4",
     "rich>=13.9.4",
     "ruff>=0.9.7",
+    "timeout-decorator>=0.5.0",
     "unsloth>=2025.2.15",
     "vllm>=0.7.3",
     "wandb>=0.19.7",

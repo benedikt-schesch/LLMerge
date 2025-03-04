@@ -20,7 +20,7 @@ list of conflict file IDs.
 """
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed, ThreadPoolExecutor
 import os
 import sys
 import shutil
@@ -30,11 +30,12 @@ import pandas as pd
 from git import GitCommandError, Repo
 from loguru import logger
 from rich.progress import Progress
+import timeout_decorator
 
 from find_merges import get_repo, get_merges
 
 
-logger.add("run.log", rotation="10 MB")
+logger.add("run.log", backtrace=True, diagnose=True)
 
 WORKING_DIR = Path(".workdir")
 
@@ -151,6 +152,8 @@ def reproduce_merge_and_extract_conflicts(
 
     # No cache exists, so reproduce the merge.
     logger.info(f"Reproducing merge {merge_sha} for {repo_slug}")
+    conflict_cache_folder.mkdir(parents=True, exist_ok=True)
+    final_cache_folder.mkdir(parents=True, exist_ok=True)
     repo = get_repo(repo_slug)
     temp_dir = WORKING_DIR / f"{repo_slug}_merge_{merge_id}"
     shutil.copytree(repo.working_dir, temp_dir, dirs_exist_ok=True)
@@ -166,8 +169,6 @@ def reproduce_merge_and_extract_conflicts(
                 path_part = line[3:].strip()
                 if path_part.endswith(".java"):
                     conflict_files.append(Path(path_part))
-    conflict_cache_folder.mkdir(parents=True, exist_ok=True)
-    final_cache_folder.mkdir(parents=True, exist_ok=True)
 
     result: List[str] = []
     if conflict_files:
@@ -213,6 +214,7 @@ def collect_merges(repo_slug: str, output_dir: Path) -> pd.DataFrame:
     return merges
 
 
+@timeout_decorator.timeout(5 * 60, use_signals=False)
 def process_merge(merge_row, output_dir: Path) -> tuple:
     """
     Step 2: Process a single merge to extract conflict files.
@@ -242,12 +244,12 @@ def main():
     parser = argparse.ArgumentParser(description="Extract conflict files from merges.")
     parser.add_argument(
         "--repos",
-        default="input_data/repos_reaper_100.csv",
+        default="input_data/repos_small.csv",
         help="CSV with merges (org/repo, merge_commit, parent_1, parent_2)",
     )
     parser.add_argument(
         "--output_dir",
-        default="merges/repos_reaper_100",
+        default="merges/repos_small",
         help="Directory to store conflict files",
     )
     parser.add_argument(
@@ -264,7 +266,7 @@ def main():
     (output_dir / "conflict_files/cache").mkdir(parents=True, exist_ok=True)
 
     repos_df = pd.read_csv(args.repos)
-    num_workers = os.cpu_count() if args.n_threads is None else args.n_threads
+    num_workers = os.cpu_count() - 1 if args.n_threads is None else args.n_threads  # type: ignore
 
     # STEP 1: Collect all merges in parallel
     logger.info(
@@ -293,7 +295,6 @@ def main():
     all_merges_df.set_index("merge_idx", inplace=True)
     all_merges_df.to_csv(output_dir / "all_merges.csv")
     logger.info(f"Found {len(all_merges_df)} merges in total.")
-
     # Make sure merge_commit is unique
     if all_merges_df[["repository", "merge_commit"]].duplicated().any():
         logger.error("Duplicate merge_commit found in all_merges.csv")
@@ -304,29 +305,24 @@ def main():
         f"Step 2: Processing {len(all_merges_df)} merges for "
         f"conflicts using {num_workers} threads..."
     )
+    all_merges_df["conflicts"] = ""
 
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = {
-            executor.submit(process_merge, merge_row, output_dir): (
-                merge_row.name,
-                merge_row["repository"],
-            )
-            for _, merge_row in all_merges_df.iterrows()
+            executor.submit(process_merge, merge_row, output_dir): merge_id
+            for merge_id, merge_row in all_merges_df.iterrows()
         }
-
         with Progress() as progress:
             progress_task = progress.add_task(
                 "Extracting conflicts...", total=len(futures)
             )
+            # Process each future as it completes.
             for future in as_completed(futures):
                 try:
                     merge_id, conflict_str = future.result()
-
                     all_merges_df.loc[merge_id, "conflicts"] = conflict_str
-
-                except Exception as exc:
-                    logger.error(f"Worker thread raised an exception: {exc}")
-
+                except timeout_decorator.TimeoutError:
+                    logger.error("Task timed out.")
                 progress.advance(progress_task)
 
     # Combine all results

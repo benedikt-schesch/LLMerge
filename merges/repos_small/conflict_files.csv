@@ -1,5 +1,1 @@
 merge_idx,repository,branch_name,merge_commit,parent_1,parent_2,notes,conflicts
-0,benedikt-schesch/git-hires-merge-example,refs/heads/main,4ae40d33c3b959e3a15e458eb9b0676251e36a41,48199306f02a82abdeff0c01fab1ce112126d727,488122ce6c91e157d1f49b88b79feaa083fdee5b,,0-0
-1,benedikt-schesch/git-hires-merge-example,refs/remotes/origin/import_1,0209c47c118fcaf978f6ebc5bad8a334b541de0b,b4331092d8c5d1b03e6a9807ab135ed263b52663,8204af9984280ccc7f7793f903fc0807b626bf9c,,1-0
-6,pedrovgs/Algorithms,refs/heads/master,d7e0b1c03fa7cacf40b32dcfde30871e8947445a,2c4e69eb243a81ba05d24456b3cad7e8a696f630,8a1a1a7fb53732edaf17ef9876545c4bca568e05,,6-0
-63,tntim96/JSCover,refs/remotes/origin/pull/94,c905e6a5da47ddf684d6cb6b6c52a6d5cb0d2e3b,390eb1dbfc709f2b75889697a9296ffeb06424a4,2e483d3cd3abbb5b6af28ea519278f597ccded96,,63-0

@@ -10,7 +10,7 @@ from rich.progress import track
 from loguru import logger
 from variables import SYSTEM_PROMPT, QUERY_PROMPT
 
-logger.add("run.log")
+logger.add("run.log", backtrace=True, diagnose=True)
 
 
 def build_query(query: str) -> str:

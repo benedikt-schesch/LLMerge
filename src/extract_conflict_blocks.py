@@ -29,11 +29,13 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 
 from loguru import logger
 from rich.progress import Progress
 
-logger.add("run.log", rotation="10 MB", backtrace=True, diagnose=True)
+logger.add("run.log", backtrace=True, diagnose=True)
 
 MAX_CONTEXT_RESOLUTION_EXTRACTION = 20
 
@@ -356,12 +358,12 @@ def main():
     )
     parser.add_argument(
         "--input_dir",
-        default="merges/repos_50/conflict_files",
+        default="merges/repos_reaper_1000/conflict_files",
         help="Processing directory",
     )
     parser.add_argument(
         "--output_dir",
-        default="merges/repos_50/conflict_blocks",
+        default="merges/repos_reaper_1000/conflict_blocks",
         help="Output directory for conflict snippets",
     )
     parser.add_argument(
@@ -384,16 +386,20 @@ def main():
         task = progress.add_task(
             "Processing conflict files...", total=len(conflict_files)
         )
-        for cfile in conflict_files:
+
+        def process(cfile):
             final_file = cfile.with_suffix(".final_merged")
             if not final_file.exists():
                 logger.warning(f"No matching .final_merged for {cfile}")
-                progress.advance(task)
-                continue
+                return
             process_conflict_file(
                 cfile, final_file, args.context, output_dir=output_dir
             )
-            progress.advance(task)
+
+        with ThreadPoolExecutor(max_workers=os.cpu_count() - 1) as executor:  # type: ignore
+            futures = {executor.submit(process, cfile) for cfile in conflict_files}
+            for _ in as_completed(futures):
+                progress.advance(task)
 
     logger.info(f"Done processing conflict files. Output is in {output_dir}")
     print(f"Done processing conflict files. Output is in {output_dir}")

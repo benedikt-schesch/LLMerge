@@ -2,7 +2,7 @@
 # pylint: disable=line-too-long
 """This file contains the global variables used in the project."""
 
-MAX_NUM_MERGES = 10
+MAX_NUM_MERGES = 100
 
 MODEL = "unsloth/deepSeek-r1-distill-qwen-7b"  # Model to use for generation
 MAX_SEQ_LENGTH = 2048  # Maximum number of tokens of the entire sequence

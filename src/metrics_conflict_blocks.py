@@ -41,7 +41,7 @@ from loguru import logger
 from build_dataset import build_query
 from variables import MODEL, MAX_PROMPT_LENGTH
 
-logger.add("run.log")
+logger.add("run.log", backtrace=True, diagnose=True)
 
 
 def get_token_count(tokenizer, conflict_query: List[str]) -> int:
