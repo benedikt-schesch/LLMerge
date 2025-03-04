@@ -15,6 +15,8 @@ os.environ["WANDB_PROJECT"] = "LLMerge"
 
 PatchFastRL("GRPO", FastLanguageModel)
 
+print("Loading dataset...")
+
 dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
 CORRECT_REWARD_STRENGTH = 1

@@ -30,4 +30,3 @@ cd
 git clone https://github.com/benedikt-schesch/LLMerge.git
 cd LLMerge
 uv sync
-screen
