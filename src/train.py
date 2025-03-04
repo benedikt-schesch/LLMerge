@@ -20,6 +20,7 @@ dataset = load_from_disk("merges/repos_50/dataset")
 CORRECT_REWARD_STRENGTH = 1
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
 
+
 # Load and prep dataset
 def extract_answer(text: str) -> str:
     """Extracts the answer block from the new formatted response."""
@@ -46,9 +47,11 @@ def java_markdown_reward(completions, **kwargs) -> list[float]:
     ]
     return rewards
 
+
 def similarity(s1: str, s2: str) -> float:
     """Return similarity ratio between two strings (1.0 means identical)."""
     return SequenceMatcher(None, s1, s2).ratio()
+
 
 def extract_code_block(text: str) -> Optional[str]:
     """
@@ -60,7 +63,10 @@ def extract_code_block(text: str) -> Optional[str]:
         return match.group(1).strip()
     return None
 
-def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[float]:
+
+def correctness_reward_func(  # pylint: disable=too-many-locals
+    prompts, completions, answer, **kwargs
+) -> list[float]:
     """
     Computes reward as the similarity ratio (acting as a normalized edit distance signal)
     between the answer block from the response and a reference.
@@ -86,17 +92,20 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
     entry_number = existing_entries + 1
 
     with open(debug_file, "a", encoding="utf-8") as f:
-        f.write(f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nExpected Answer:\n{answer[0]}\n\n")
+        f.write(
+            f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nExpected Answer:\n{answer[0]}\n\n"
+        )
         for idx, r in enumerate(responses):
             f.write(f"Response {idx}:\n{r}\n\n")
-
 
     rewards = []
     for r in extracted_responses:
         r = extract_code_block(r)
         if r is None:
             rewards.append(0.0)
-        elif any(marker in r for marker in ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]):
+        elif any(
+            marker in r for marker in ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
+        ):
             # If conflict markers are present, compare the answer to the input prompt's code block.
             code_block = extract_code_block(q)
             assert code_block is not None, "Code block not found in prompt"
@@ -106,7 +115,7 @@ def correctness_reward_func(prompts, completions, answer, **kwargs) -> list[floa
             # Otherwise, compare to the expected resolved result.
             sim = similarity(r, answer[0])
             if sim == 1.0:
-                rewards.append(CORRECT_REWARD_STRENGTH*sim)
+                rewards.append(CORRECT_REWARD_STRENGTH * sim)
             else:
                 rewards.append(sim)
     return rewards
