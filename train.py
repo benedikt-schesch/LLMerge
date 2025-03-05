@@ -170,7 +170,7 @@ if __name__ == "__main__":
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL,
         max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
-        load_in_4bit=True,  # False for LoRA 16bit
+        load_in_4bit=False,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
         gpu_memory_utilization=0.5,  # Reduce if out of memory
@@ -195,7 +195,7 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
-        learning_rate=1e-6,
+        learning_rate=5e-6,
         adam_beta1=0.9,
         adam_beta2=0.99,
         weight_decay=0,
