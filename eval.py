@@ -41,14 +41,14 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
     logger.info("Starting evaluation...")
     logger.info(f"Loaded {len(dataset)} examples.")
 
-    model_name = "unsloth/deepSeek-r1-distill-qwen-1.5b"
+    model_name = "unsloth/deepSeek-r1-distill-qwen-7b"
 
     torch.set_grad_enabled(False)
     output_dir = Path("eval_ouputs")
 
     # Load the model and tokenizer (using same parameters as in training)
     if "unsloth" in model_name:
-        load_in_4bit = True
+        load_in_4bit = False
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
@@ -70,6 +70,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
 
     # Set up file to store full outputs before truncation.
     output_dir.mkdir(parents=True, exist_ok=True)
+    logger.add(output_dir / "eval.log", backtrace=True, diagnose=True)
 
     total = 0
     count_thinking = 0
