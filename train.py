@@ -9,7 +9,7 @@ from typing import Optional
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
-from variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH, SYSTEM_PROMPT
+from src.variables import MODEL, MAX_SEQ_LENGTH, LORA_RANK, MAX_PROMPT_LENGTH, SYSTEM_PROMPT
 
 os.environ["WANDB_PROJECT"] = "LLMerge"
 
