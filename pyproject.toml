@@ -60,4 +60,7 @@ line-ending = "auto"
 [tool.mypy]
 exclude = [
     'repos/',
+    '.venv',
+    'train.py',
+    'eval.py',
 ]

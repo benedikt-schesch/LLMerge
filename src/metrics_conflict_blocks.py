@@ -39,8 +39,8 @@ import pandas as pd
 from transformers import AutoTokenizer
 from loguru import logger
 from rich.progress import track
-from .build_dataset import build_query
-from .variables import MODEL, MAX_PROMPT_LENGTH
+from build_dataset import build_query
+from variables import MODEL, MAX_PROMPT_LENGTH
 
 
 logger.add("run.log", backtrace=True, diagnose=True)

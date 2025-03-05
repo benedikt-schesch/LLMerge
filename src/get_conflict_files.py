@@ -32,7 +32,7 @@ from loguru import logger
 from rich.progress import Progress
 import timeout_decorator
 
-from .find_merges import get_repo, get_merges
+from find_merges import get_repo, get_merges
 
 
 logger.add("run.log", backtrace=True, diagnose=True)
