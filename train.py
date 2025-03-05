@@ -20,12 +20,6 @@ from src.variables import (
 
 os.environ["WANDB_PROJECT"] = "LLMerge"
 
-PatchFastRL("GRPO", FastLanguageModel)
-
-print("Loading dataset...")
-
-dataset = load_from_disk("merges/repos_reaper_1000/dataset")
-
 CORRECT_ANSWER_MULTIPLIER = math.sqrt(2)
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
 THINKING_PATTERN = r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$"
@@ -167,6 +161,12 @@ def correctness_reward_func(
 
 
 if __name__ == "__main__":
+    PatchFastRL("GRPO", FastLanguageModel)
+
+    print("Loading dataset...")
+
+    dataset = load_from_disk("merges/repos_reaper_1000/dataset")
+
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL,
         max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
