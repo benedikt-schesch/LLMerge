@@ -6,7 +6,7 @@ import os
 import re
 import math
 from difflib import SequenceMatcher
-from typing import Optional
+from typing import Optional, List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
@@ -26,8 +26,10 @@ print("Loading dataset...")
 
 dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
-CORRECT_REWARD_STRENGTH = math.sqrt(2)
+CORRECT_ANSWER_MULTIPLIER = math.sqrt(2)
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
+THINKING_PATTERN = r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$"
+CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
 
 
 # Load and prep dataset
@@ -38,9 +40,8 @@ def extract_answer(text: str) -> str:
 
 def format_reward(completions, **kwargs) -> list[float]:
     """Reward function that checks if the completion has a specific format."""
-    pattern = r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$"
     responses = [completion[0]["content"] for completion in completions]
-    matches = [re.match(pattern, r) for r in responses]
+    matches = [re.match(THINKING_PATTERN, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
 
@@ -73,25 +74,9 @@ def extract_code_block(text: str) -> Optional[str]:
     return None
 
 
-def correctness_reward_func(  # pylint: disable=too-many-locals
-    prompts, completions, answer, **kwargs
-) -> list[float]:
-    """
-    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
-    between the answer block from the response and a reference.
-
-    - If the answer block contains any conflict markers (e.g., <<<<<<<, =======, >>>>>>>),
-      the reference is the code block extracted from the input prompt.
-    - Otherwise, the reference is the expected answer (provided via `answer`).
-    """
-    responses = [completion[0]["content"] for completion in completions]
+def log_responses(prompts, responses, answer):
+    """Log the responses for debugging"""
     q = prompts[0][-1]["content"]
-    extracted_responses = [extract_answer(r) for r in responses]
-
-    # Print the first response for debugging
-    print("-" * 20, f"\nResponse:\n{responses[0]}")
-
-    # Log details to debug file
     debug_file = "debug.txt"
     if os.path.exists(debug_file):
         with open(debug_file, "r", encoding="utf-8") as f:
@@ -107,26 +92,74 @@ def correctness_reward_func(  # pylint: disable=too-many-locals
         for idx, r in enumerate(responses):
             f.write(f"Response {idx}:\n{r}\n\n")
 
+
+def has_conflict_markers(text: str) -> bool:
+    """Check if the text contains any conflict markers."""
+    return any(marker in text for marker in CONFLICT_MARKERS)
+
+
+def compute_conflict_reward(
+    prompts: List[List[Dict[str, str]]], code_block: str
+) -> float:
+    """
+    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
+    between the answer block from the response and a reference.
+    """
+    goal_code_block = extract_code_block(prompts[0][-1]["content"])
+    assert goal_code_block is not None, "Code block not found in prompt"
+    sim = similarity(code_block, goal_code_block)
+    return sim
+
+
+def compute_goal_file_reward(
+    prompts: List[List[Dict[str, str]]],
+    code_block: str,
+    correct_answer_multiplier: float = CORRECT_ANSWER_MULTIPLIER,
+) -> float:
+    """
+    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
+    between the answer block from the response and a reference.
+    """
+    goal_code_block = extract_code_block(prompts[0][-1]["content"])
+    assert goal_code_block is not None, "Code block not found in prompt"
+    sim = similarity(code_block, goal_code_block)
+    return correct_answer_multiplier * sim if sim == 1.0 else sim
+
+
+def correctness_reward_func(
+    prompts: List[List[Dict[str, str]]],
+    completions: List[List[Dict[str, str]]],
+    answer: List[str],
+    correct_answer_multiplier: float = CORRECT_ANSWER_MULTIPLIER,
+    **kwargs,
+) -> list[float]:
+    """
+    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
+    between the answer block from the response and a reference.
+
+    - If the answer block contains any conflict markers (e.g., <<<<<<<, =======, >>>>>>>),
+      the reference is the code block extracted from the input prompt.
+    - Otherwise, the reference is the expected answer (provided via `answer`).
+    """
+    responses = [completion[0]["content"] for completion in completions]
+    extracted_responses = [extract_answer(r) for r in responses]
+
+    # Print the first response for debugging
+    print("-" * 20, f"\nResponse:\n{responses[0]}")
+
+    log_responses(prompts, responses, answer)
+
     rewards = []
-    for r in extracted_responses:
-        r = extract_code_block(r)
-        if r is None:
+    for response in extracted_responses:
+        code_block = extract_code_block(response)
+        if code_block is None:
             rewards.append(0.0)
-        elif any(
-            marker in r for marker in ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
-        ):
-            # If conflict markers are present, compare the answer to the input prompt's code block.
-            code_block = extract_code_block(q)
-            assert code_block is not None, "Code block not found in prompt"
-            sim = similarity(r, code_block)
-            rewards.append(sim)
+        elif has_conflict_markers(code_block):
+            rewards.append(compute_conflict_reward(prompts, code_block))
         else:
-            # Otherwise, compare to the expected resolved result.
-            sim = similarity(r, answer[0])
-            if sim == 1.0:
-                rewards.append(CORRECT_REWARD_STRENGTH * sim)
-            else:
-                rewards.append(sim)
+            rewards.append(
+                compute_goal_file_reward(prompts, code_block, correct_answer_multiplier)
+            )
 
     # Square the rewards to amplify the signal
     rewards = [r**2 for r in rewards]

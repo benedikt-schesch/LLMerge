@@ -33,7 +33,7 @@ def generate_response(model_name: str, prompt: str) -> str:
 
 
 if __name__ == "__main__":
-    MODEL_NAME = "unsloth/deepSeek-r1-distill-qwen-1.5b"
+    MODEL_NAME = "unsloth/deepSeek-r1-distill-qwen-7b"
     QUESTION = "What is 1+1?"
 
     response = generate_response(MODEL_NAME, QUESTION)
