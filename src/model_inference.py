@@ -3,7 +3,7 @@
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-from variables import SYSTEM_PROMPT
+from .variables import SYSTEM_PROMPT
 
 
 def load_model(model_name: str):

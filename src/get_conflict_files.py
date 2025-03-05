@@ -32,7 +32,7 @@ from loguru import logger
 from rich.progress import Progress
 import timeout_decorator
 
-from find_merges import get_repo, get_merges
+from .find_merges import get_repo, get_merges
 
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -326,7 +326,7 @@ def main():
                 progress.advance(progress_task)
 
     # Combine all results
-    all_merges_df = all_merges_df[all_merges_df["conflicts"] != ""]  # pylint: disable=C1804
+    all_merges_df = all_merges_df[all_merges_df["conflicts"] != ""]  # pylint: disable=use-implicit-booleaness-not-comparison-to-string
     all_merges_df.to_csv(output_dir / "conflict_files.csv")
 
     logger.info("Done extracting conflict files.")

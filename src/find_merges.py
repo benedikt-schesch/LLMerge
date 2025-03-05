@@ -22,7 +22,7 @@ import pandas as pd
 from git import Commit, GitCommandError, Repo
 from loguru import logger
 
-from variables import MAX_NUM_MERGES
+from .variables import MAX_NUM_MERGES
 
 # Create a cache folder for merge results
 CACHE_DIR = Path("merge_cache/merges")

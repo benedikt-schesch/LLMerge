@@ -8,7 +8,7 @@ from typing import Dict, Union, List
 from datasets import Dataset, DatasetDict
 from rich.progress import track
 from loguru import logger
-from variables import SYSTEM_PROMPT, QUERY_PROMPT
+from .variables import SYSTEM_PROMPT, QUERY_PROMPT
 
 logger.add("run.log", backtrace=True, diagnose=True)
 

@@ -39,8 +39,8 @@ import pandas as pd
 from transformers import AutoTokenizer
 from loguru import logger
 from rich.progress import track
-from build_dataset import build_query
-from variables import MODEL, MAX_PROMPT_LENGTH
+from .build_dataset import build_query
+from .variables import MODEL, MAX_PROMPT_LENGTH
 
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -146,7 +146,7 @@ def functional_equality(left: List[str], right: List[str]) -> bool:
     return normalize(left) == normalize(right)
 
 
-def main():  # pylint: disable=too-many-branches, too-many-statements, too-many-locals
+def main():  # pylint: disable=too-many-statements, too-many-locals
     """Main entry point"""
     parser = argparse.ArgumentParser(
         description="Compute metrics for each conflict snippet "
