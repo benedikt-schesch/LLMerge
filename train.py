@@ -17,7 +17,7 @@ PatchFastRL("GRPO", FastLanguageModel)
 
 print("Loading dataset...")
 
-dataset = load_from_disk("merges/repos_reaper_1000/dataset")
+dataset = load_from_disk("repos_reaper_1000/dataset")
 
 CORRECT_REWARD_STRENGTH = 1
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
