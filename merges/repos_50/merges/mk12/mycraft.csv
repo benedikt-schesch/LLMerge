@@ -1,3 +1,0 @@
-merge_idx,repository,branch_name,merge_commit,parent_1,parent_2,notes
-0,mk12/mycraft,refs/heads/main,0c97f91ba74f68cb663a2ac18a4504c42d8e91a4,bbd62d6d8de3c99fb0bb8477e9521410bcdce1cc,cf88ce49705b14d4938201250cde025037ab45dc,
-1,mk12/mycraft,refs/heads/main,f6d59f46f29db95858a55405fc795080dd7bef40,1e3f083b3707436d2bec9f0376fed750b09ce161,c40eb3a062c24d03aeec53694545cf07a1ccd594,

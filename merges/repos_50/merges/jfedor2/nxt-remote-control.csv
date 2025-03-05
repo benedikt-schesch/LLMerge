@@ -1,2 +1,0 @@
-merge_idx,repository,branch_name,merge_commit,parent_1,parent_2,notes
-0,jfedor2/nxt-remote-control,refs/remotes/origin/pull/7,af86c34ad15120f40717003d03e6c1d5b9890ea4,d599590b2984dd56b3dbcb99f564ea09edd65696,1206d8b6010bd33cc169acd6afb64affc76663c2,a parent is the base
