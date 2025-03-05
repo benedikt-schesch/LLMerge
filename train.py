@@ -4,6 +4,7 @@
 
 import os
 import re
+import math
 from difflib import SequenceMatcher
 from typing import Optional
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
@@ -25,7 +26,7 @@ print("Loading dataset...")
 
 dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
-CORRECT_REWARD_STRENGTH = 1
+CORRECT_REWARD_STRENGTH = math.sqrt(2)
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
 
 
@@ -126,6 +127,9 @@ def correctness_reward_func(  # pylint: disable=too-many-locals
                 rewards.append(CORRECT_REWARD_STRENGTH * sim)
             else:
                 rewards.append(sim)
+
+    # Square the rewards to amplify the signal
+    rewards = [r**2 for r in rewards]
     return rewards
 
 
