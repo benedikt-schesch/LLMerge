@@ -185,7 +185,6 @@ if __name__ == "__main__":
         max_grad_norm=0.2,
         report_to="wandb",
         output_dir="outputs",
-        run_name="testing",
     )
 
     trainer = GRPOTrainer(
