@@ -4,6 +4,7 @@
 .venv
 repos/
 gil_free_env/
+eval_ouputs/
 **.lock
 .workdir/
 **/file_conflicts
