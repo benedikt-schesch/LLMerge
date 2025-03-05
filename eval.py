@@ -12,6 +12,7 @@ Loads the same dataset as in training and computes:
 # Import variables and functions from your training script.
 from datasets import load_from_disk
 from rich.progress import track
+import torch
 from train import (
     MAX_SEQ_LENGTH,
     MAX_PROMPT_LENGTH,
@@ -33,6 +34,9 @@ def main():  # pylint: disable=too-many-locals
 
     model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print("Device:", device)
+
     # Load the model and tokenizer (using same parameters as in training)
     if "unsloth" in model_name:
         from unsloth import FastLanguageModel  # pylint: disable=import-outside-toplevel
@@ -51,6 +55,7 @@ def main():  # pylint: disable=too-many-locals
         model = AutoModelForCausalLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+    model.to(device)
     total = 0
     count_thinking = 0
     count_java_md = 0
