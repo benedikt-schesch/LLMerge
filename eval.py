@@ -48,7 +48,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
 
     # Load the model and tokenizer (using same parameters as in training)
     if "unsloth" in model_name:
-        load_in_4bit = False
+        load_in_4bit = True
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),

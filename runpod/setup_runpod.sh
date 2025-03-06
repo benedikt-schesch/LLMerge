@@ -29,5 +29,6 @@ pip install uv
 cd
 git clone https://github.com/benedikt-schesch/LLMerge.git
 cd LLMerge
+pip install uv
 uv sync
 screen
