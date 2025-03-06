@@ -174,6 +174,53 @@ def merged_conflict_reward(
     ]
 
 
+def normalize_java_code(code: str) -> str:
+    """
+    Normalizes Java code by removing block comments, line comments, and extra whitespace.
+    This helps to focus on the semantics rather than formatting details.
+    """
+    # Remove block comments (/* ... */)
+    code = re.sub(r'/\*[\s\S]*?\*/', '', code)
+    # Remove line comments (//...)
+    code = re.sub(r'//.*', '', code)
+    # Replace multiple whitespace characters with a single space
+    code = re.sub(r'\s+', ' ', code)
+    return code.strip()
+
+
+def soft_correctness_reward(
+    prompts: List[List[Dict[str, str]]],
+    completions: List[List[Dict[str, str]]],
+    answer: List[str],
+    **kwargs,
+) -> list[float]:
+    """
+    Computes a soft reward based on semantic similarity between the Java code in the response and the
+    goal code block. Instead of checking for strict equality, it normalizes both pieces of code
+    (removing comments and extra whitespace) before comparing, which helps to capture Java semantics.
+    """
+    # Extract the content responses and the answer block from each response
+    responses = [completion[0]["content"] for completion in completions]
+    extracted_responses = [extract_answer(r) for r in responses]
+
+    # Log responses for debugging purposes
+    log_responses(prompts, responses, answer)
+
+    rewards = []
+    for response in extracted_responses:
+        code_block = extract_code_block(response)
+        if code_block is None:
+            rewards.append(0.0)
+        else:
+            goal_code_block = extract_code_block(prompts[0][-1]["content"])
+            if goal_code_block is None:
+                raise ValueError("Code block not found in prompt")
+            # Normalize both code blocks to remove non-semantic differences
+            normalized_code = normalize_java_code(code_block)
+            normalized_goal = normalize_java_code(goal_code_block)
+            rewards.append(normalized_code == normalized_goal)
+    return rewards
+
 if __name__ == "__main__":
     PatchFastRL("GRPO", FastLanguageModel)
 
