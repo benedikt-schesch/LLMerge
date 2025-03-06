@@ -106,7 +106,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
         with open(output_file, "w", encoding="utf-8") as output_file:
             output_file.write(full_completion)
 
-        completion = full_completion.split("<｜Assistant｜>", 1)[1]
+        if "<｜Assistant｜>" in full_completion:
+            completion = full_completion.split("<｜Assistant｜>", 1)[1]
+        elif "<|im_start|>assistant" in full_completion:
+            completion = full_completion.split("<|im_start|>assistant", 1)[1]
+        else:
+            raise ValueError("Could not find completion in full output.")
 
         # Wrap prompt text into the expected structure.
         wrapped_completions = [[{"content": completion}]]
