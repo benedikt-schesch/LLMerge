@@ -51,7 +51,6 @@ def java_markdown_reward(completions, **kwargs) -> list[float]:
     return rewards
 
 
-
 def extract_code_block(text: str) -> Optional[str]:
     """
     Extracts a code block from a markdown-formatted text.
@@ -161,11 +160,11 @@ def normalize_java_code(code: str) -> str:
     This helps to focus on the semantics rather than formatting details.
     """
     # Remove block comments (/* ... */)
-    code = re.sub(r'/\*[\s\S]*?\*/', '', code)
+    code = re.sub(r"/\*[\s\S]*?\*/", "", code)
     # Remove line comments (//...)
-    code = re.sub(r'//.*', '', code)
+    code = re.sub(r"//.*", "", code)
     # Replace multiple whitespace characters with a single space
-    code = re.sub(r'\s+', ' ', code)
+    code = re.sub(r"\s+", " ", code)
     return code.strip()
 
 
@@ -201,6 +200,7 @@ def soft_correctness_reward(
             normalized_goal = normalize_java_code(goal_code_block)
             rewards.append(normalized_code == normalized_goal)
     return rewards
+
 
 if __name__ == "__main__":
     PatchFastRL("GRPO", FastLanguageModel)
