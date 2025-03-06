@@ -41,7 +41,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
     logger.info("Starting evaluation...")
     logger.info(f"Loaded {len(dataset)} examples.")
 
-    model_name = "unsloth/QwQ-32B"
+    model_name = "unsloth/DeepSeek-R1-Distill-Qwen-32B"
 
     torch.set_grad_enabled(False)
     output_dir = Path("eval_ouputs")
