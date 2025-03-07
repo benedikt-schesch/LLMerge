@@ -25,67 +25,116 @@ THINKING_PATTERN = r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$"
 CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
 
 
-# Load and prep dataset
+# def log_responses(
+#     prompts: List[List[Dict[str, str]]], responses: List[str], answer: List[str]
+# ) -> None:
+#     """Log the responses for debugging"""
+#     q = prompts[0][-1]["content"]
+#     debug_file = "debug.txt"
+#     if os.path.exists(debug_file):
+#         with open(debug_file, "r", encoding="utf-8") as f:
+#             existing_entries = f.read().count("Question:")
+#     else:
+#         existing_entries = 0
+#     entry_number = existing_entries + 1
+
+#     with open(debug_file, "a", encoding="utf-8") as f:
+#         f.write(
+#             f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nExpected Answer:\n{answer[0]}\n\n"
+#         )
+#         for idx, r in enumerate(responses):
+#             f.write(f"Response {idx}:\n{r}\n\n")
+
+# ------------------------------------------
+# 1) Pre-compile your regex patterns
+# ------------------------------------------
+JAVA_MARKDOWN_RE = re.compile(r"```java\n(.*?)\n```", re.DOTALL)
+THINKING_RE = re.compile(r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$", re.DOTALL)
+
+# For normalizing Java code
+BLOCK_COMMENT_RE = re.compile(r"/\*[\s\S]*?\*/")
+LINE_COMMENT_RE = re.compile(r"//.*")
+WHITESPACE_RE = re.compile(r"\s+")
+
+CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
+
+# Pre-compile patterns
+JAVA_MARKDOWN_RE = re.compile(r"```java\n(.*?)\n```", re.DOTALL)
+THINKING_RE = re.compile(r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$", re.DOTALL)
+
+# For normalizing Java code
+BLOCK_COMMENT_RE = re.compile(r"/\*[\s\S]*?\*/")
+LINE_COMMENT_RE = re.compile(r"//.*")
+WHITESPACE_RE = re.compile(r"\s+")
+
+CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
+
+
+def normalize_java_code(code: str) -> str:
+    """
+    Normalizes Java code by removing block comments, line comments,
+    and extra whitespace (so we focus on core semantics).
+    """
+    code = BLOCK_COMMENT_RE.sub("", code)
+    code = LINE_COMMENT_RE.sub("", code)
+    code = WHITESPACE_RE.sub(" ", code)
+    return code.strip()
+
+
 def extract_answer(text: str) -> str:
-    """Extracts the answer block from the new formatted response."""
-    return text.split("</think>")[-1]
-
-
-def format_reward(completions, **kwargs) -> List[float]:
-    """Reward function that checks if the completion has a specific format."""
-    responses = [completion[0]["content"] for completion in completions]
-    matches = [re.match(THINKING_PATTERN, r) for r in responses]
-    return [0.5 if match else 0.0 for match in matches]
-
-
-def java_markdown_reward(completions, **kwargs) -> List[float]:
     """
-    Checks if the answer block (extracted via extract_xml_answer) contains Java markdown formatting.
-    This version is 'strong' because it only considers the content within the answer block.
+    Extracts the answer portion from the response (after </think>).
+    If there's no </think>, just returns the original text.
     """
-    responses = [completion[0]["content"] for completion in completions]
-    rewards = [
-        1.0 if re.search(JAVA_MARKDOWN_PATTERN, extract_answer(r), re.DOTALL) else 0.0
-        for r in responses
-    ]
-    return rewards
+    parts = text.split("</think>", 1)
+    return parts[-1] if len(parts) > 1 else parts[0]
 
 
 def extract_code_block(text: str) -> Optional[str]:
     """
-    Extracts a code block from a markdown-formatted text.
-    If no markdown code block is found, returns None
+    Extracts the code block from a markdown-formatted text:
+       ```java
+       ... some code ...
+       ```
+    Returns None if there's no Java code block.
     """
-    match = re.search(JAVA_MARKDOWN_PATTERN, text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return None
-
-
-def log_responses(
-    prompts: List[List[Dict[str, str]]], responses: List[str], answer: List[str]
-) -> None:
-    """Log the responses for debugging"""
-    q = prompts[0][-1]["content"]
-    debug_file = "debug.txt"
-    if os.path.exists(debug_file):
-        with open(debug_file, "r", encoding="utf-8") as f:
-            existing_entries = f.read().count("Question:")
-    else:
-        existing_entries = 0
-    entry_number = existing_entries + 1
-
-    with open(debug_file, "a", encoding="utf-8") as f:
-        f.write(
-            f"\n\nEntry #{entry_number}\nQuestion:\n{q}\nExpected Answer:\n{answer[0]}\n\n"
-        )
-        for idx, r in enumerate(responses):
-            f.write(f"Response {idx}:\n{r}\n\n")
+    match = JAVA_MARKDOWN_RE.search(text)
+    return match.group(1).strip() if match else None
 
 
 def has_conflict_markers(text: str) -> bool:
-    """Check if the text contains any conflict markers."""
+    """Check if the text contains any conflict markers (e.g., '<<<<<<<')."""
     return any(marker in text for marker in CONFLICT_MARKERS)
+
+
+# ------------------------------------------------------------------
+# Reward Functions (using list comprehensions where possible)
+# ------------------------------------------------------------------
+
+
+def format_reward(
+    completions: List[List[Dict[str, str]]],
+    **kwargs,
+) -> List[float]:
+    """
+    Reward = 0.5 if the completion matches the 'thinking' pattern.
+    Otherwise 0.0.
+    """
+    return [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
+
+
+def java_markdown_reward(
+    completions: List[List[Dict[str, str]]],
+    **kwargs,
+) -> List[float]:
+    """
+    Reward = 1.0 if the *answer block* (after </think>) contains a Java code block (```java ... ```).
+    Otherwise 0.0.
+    """
+    return [
+        1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
+        for c in completions
+    ]
 
 
 def raise_conflict_reward(
@@ -95,33 +144,18 @@ def raise_conflict_reward(
     **kwargs,
 ) -> List[float]:
     """
-    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
-    between the answer block from the response and a reference.
-
-    - If the answer block contains any conflict markers (e.g., <<<<<<<, =======, >>>>>>>),
-      the reference is the code block extracted from the input prompt.
-    - Otherwise, the reference is the expected answer (provided via `answer`).
+    Reward = 0.1 if the code block in the completion’s answer matches
+    the code block in the prompt’s last message; else 0.0.
+    (If no code block is found, reward = 0.0.)
     """
-    responses = [completion[0]["content"] for completion in completions]
-    extracted_responses = [extract_answer(r) for r in responses]
+    # Extract the "goal" code block once
+    goal_code_block = extract_code_block(prompts[0][-1]["content"])
 
-    # Print the first response for debugging
-    print("-" * 20, f"\nResponse:\n{responses[0]}")
-
-    log_responses(prompts, responses, answer)
-
-    rewards = []
-    for response in extracted_responses:
-        code_block = extract_code_block(response)
-        if code_block is None:
-            rewards.append(0.0)
-        else:
-            goal_code_block = extract_code_block(prompts[0][-1]["content"])
-            if goal_code_block == code_block:
-                rewards.append(0.1)
-            else:
-                rewards.append(0.0)
-    return rewards
+    return [
+        0.1 if cb is not None and cb == goal_code_block else 0.0
+        for c in completions
+        for cb in (extract_code_block(extract_answer(c[0]["content"])),)
+    ]
 
 
 def resolve_conflict_reward(
@@ -130,38 +164,18 @@ def resolve_conflict_reward(
     **kwargs,
 ) -> List[float]:
     """
-    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
-    between the answer block from the response and a reference.
-
-    - If the answer block contains any conflict markers (e.g., <<<<<<<, =======, >>>>>>>),
-      the reference is the code block extracted from the input prompt.
-    - Otherwise, the reference is the expected answer (provided via `answer`).
+    Reward = 1.0 if the code block in the completion's answer
+    is *exactly* equal to `answer[idx]`. Else 0.0.
     """
-    responses = [completion[0]["content"] for completion in completions]
-    extracted_responses = [extract_answer(r) for r in responses]
-
-    rewards = []
-    for idx, response in enumerate(extracted_responses):
-        code_block = extract_code_block(response)
-        if code_block is None:
-            rewards.append(0.0)
-        else:
-            rewards.append(code_block == answer[idx])
-    return rewards
-
-
-def normalize_java_code(code: str) -> str:
-    """
-    Normalizes Java code by removing block comments, line comments, and extra whitespace.
-    This helps to focus on the semantics rather than formatting details.
-    """
-    # Remove block comments (/* ... */)
-    code = re.sub(r"/\*[\s\S]*?\*/", "", code)
-    # Remove line comments (//...)
-    code = re.sub(r"//.*", "", code)
-    # Replace multiple whitespace characters with a single space
-    code = re.sub(r"\s+", " ", code)
-    return code.strip()
+    return [
+        1.0
+        if (
+            (cb := extract_code_block(extract_answer(c[0]["content"]))) is not None
+            and cb == answer[idx]
+        )
+        else 0.0
+        for idx, c in enumerate(completions)
+    ]
 
 
 def soft_resolve_conflict_reward(
@@ -170,25 +184,20 @@ def soft_resolve_conflict_reward(
     **kwargs,
 ) -> List[float]:
     """
-    Computes a soft reward based on semantic similarity between the Java code in
-    the response and the goal code block. Instead of checking for strict equality,
-    it normalizes both pieces of code (removing comments and extra whitespace)
-    before comparing, which helps to capture Java semantics.
-    """
-    # Extract the content responses and the answer block from each response
-    responses = [completion[0]["content"] for completion in completions]
-    extracted_responses = [extract_answer(r) for r in responses]
+    Same as `resolve_conflict_reward`, but uses normalized Java code for a
+    'soft' semantic match (ignoring comments and whitespace).
 
-    rewards = []
-    for idx, response in enumerate(extracted_responses):
-        code_block = extract_code_block(response)
-        if code_block is None:
-            rewards.append(0.0)
-        else:
-            normalized_code = normalize_java_code(code_block)
-            normalized_goal = normalize_java_code(answer[idx])
-            rewards.append(normalized_code == normalized_goal)
-    return rewards
+    Reward = 1.0 if normalized code blocks match, else 0.0.
+    """
+    return [
+        1.0
+        if (
+            (cb := extract_code_block(extract_answer(c[0]["content"]))) is not None
+            and normalize_java_code(cb) == normalize_java_code(answer[idx])
+        )
+        else 0.0
+        for idx, c in enumerate(completions)
+    ]
 
 
 if __name__ == "__main__":
