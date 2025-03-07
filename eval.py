@@ -20,9 +20,7 @@ from train import (
     MAX_SEQ_LENGTH,
     MAX_PROMPT_LENGTH,
     SYSTEM_PROMPT,
-    resolve_conflict_reward,
-    soft_resolve_conflict_reward,
-    raise_conflict_reward,
+    merged_conflict_reward,
     format_reward,
     java_markdown_reward,
 )
@@ -144,18 +142,20 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         if java_markdown_reward(completions)[0] > 0:
             count_java_md += 1
 
+        reward = merged_conflict_reward(prompts, completions, answers)[0]
+
         # If the model raises a conflict
-        if raise_conflict_reward(prompts, completions, answers)[0] > 0:
+        if reward == 0.1:
             count_conflict_preserved += 1
 
         # If the model resolves the conflict perfectly
-        if resolve_conflict_reward(completions, answers)[0] > 0:
-            logger.info(f"Example {idx} resolved perfectly.")
+        if reward >= 0.5:
+            logger.info(f"Semantically resolved {idx}.")
             count_resolved_perfectly += 1
-            count_resolved_semantically += 1
 
         # If the model resolves the conflict semantically
-        if soft_resolve_conflict_reward(completions, answers)[0] > 0:
+        if reward == 1.0:
+            logger.info(f"Resolved {idx}.")
             count_resolved_semantically += 1
 
     # Compute percentages.

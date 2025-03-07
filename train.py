@@ -128,7 +128,7 @@ def java_markdown_reward(
     **kwargs,
 ) -> List[float]:
     """
-    Reward = 1.0 if the *answer block* (after </think>) 
+    Reward = 1.0 if the *answer block* (after </think>)
     contains a Java code block (```java ... ```).
     Otherwise 0.0.
     """
