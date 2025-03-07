@@ -4,7 +4,7 @@
 
 MAX_NUM_MERGES = 100
 
-MODEL = "unsloth/QwQ-32B"  # Model to use for generation
+MODEL = "unsloth/DeepSeek-R1-Distill-Qwen-32B"  # Model to use for generation
 MAX_SEQ_LENGTH = 2048  # Maximum number of tokens of the entire sequence
 MAX_PROMPT_LENGTH = 256  # Maximum number of tokens in the prompt
 LORA_RANK = 64  # Larger rank = smarter, but slower
