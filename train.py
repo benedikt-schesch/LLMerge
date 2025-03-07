@@ -193,25 +193,20 @@ def soft_resolve_conflict_reward(
     **kwargs,
 ) -> List[float]:
     """
-    Computes a soft reward based on semantic similarity between the Java code in
-    the response and the goal code block. Instead of checking for strict equality,
-    it normalizes both pieces of code (removing comments and extra whitespace)
-    before comparing, which helps to capture Java semantics.
-    """
-    # Extract the content responses and the answer block from each response
-    responses = [completion[0]["content"] for completion in completions]
-    extracted_responses = [extract_answer(r) for r in responses]
+    Same as `resolve_conflict_reward`, but uses normalized Java code for a
+    'soft' semantic match (ignoring comments and whitespace).
 
-    rewards = []
-    for idx, response in enumerate(extracted_responses):
-        code_block = extract_code_block(response)
-        if code_block is None:
-            rewards.append(0.0)
-        else:
-            normalized_code = normalize_java_code(code_block)
-            normalized_goal = normalize_java_code(answer[idx])
-            rewards.append(normalized_code == normalized_goal)
-    return rewards
+    Reward = 1.0 if normalized code blocks match, else 0.0.
+    """
+    return [
+        1.0
+        if (
+            (cb := extract_code_block(extract_answer(c[0]["content"]))) is not None
+            and normalize_java_code(cb) == normalize_java_code(answer[idx])
+        )
+        else 0.0
+        for idx, c in enumerate(completions)
+    ]
 
 
 if __name__ == "__main__":
