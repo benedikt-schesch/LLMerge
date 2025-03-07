@@ -187,7 +187,7 @@ if __name__ == "__main__":
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.75,  # Reduce if out of memory
+        gpu_memory_utilization=0.8,  # Reduce if out of memory
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -222,7 +222,7 @@ if __name__ == "__main__":
         fp16=not is_bfloat16_supported(),
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,  # Increase to 4 for smoother training
-        num_generations=8,  # Decrease if out of memory
+        num_generations=6,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_SEQ_LENGTH,
         temperature=0.9,
