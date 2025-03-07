@@ -128,7 +128,8 @@ def java_markdown_reward(
     **kwargs,
 ) -> List[float]:
     """
-    Reward = 1.0 if the *answer block* (after </think>) contains a Java code block (```java ... ```).
+    Reward = 1.0 if the *answer block* (after </think>) 
+    contains a Java code block (```java ... ```).
     Otherwise 0.0.
     """
     return [
@@ -137,65 +138,36 @@ def java_markdown_reward(
     ]
 
 
-def raise_conflict_reward(
+def merged_conflict_reward(
     prompts: List[List[Dict[str, str]]],
     completions: List[List[Dict[str, str]]],
     answer: List[str],
     **kwargs,
 ) -> List[float]:
     """
-    Reward = 0.1 if the code block in the completion’s answer matches
-    the code block in the prompt’s last message; else 0.0.
-    (If no code block is found, reward = 0.0.)
+    Merged reward function with the following logic:
+      - 1.0 if the completion's code block exactly matches the correct resolution
+      - 0.5 if it's only semantically the same (ignoring comments/whitespace)
+      - 0.1 if it matches the prompt's code block (i.e. raises a conflict)
+      - 0.0 otherwise
     """
-    # Extract the "goal" code block once
+    # Extract the "goal" code block (the one in the prompt's last message)
     goal_code_block = extract_code_block(prompts[0][-1]["content"])
+    print("Answer:\n", answer[0])
 
     return [
-        0.1 if cb is not None and cb == goal_code_block else 0.0
-        for c in completions
-        for cb in (extract_code_block(extract_answer(c[0]["content"])),)
-    ]
-
-
-def resolve_conflict_reward(
-    completions: List[List[Dict[str, str]]],
-    answer: List[str],
-    **kwargs,
-) -> List[float]:
-    """
-    Reward = 1.0 if the code block in the completion's answer
-    is *exactly* equal to `answer[idx]`. Else 0.0.
-    """
-    return [
-        1.0
-        if (
-            (cb := extract_code_block(extract_answer(c[0]["content"]))) is not None
-            and cb == answer[idx]
+        (
+            0.0
+            if (cb := extract_code_block(extract_answer(c[0]["content"]))) is None
+            else 1.0
+            if cb == answer[idx]  # exact match
+            else 0.5
+            if normalize_java_code(cb)
+            == normalize_java_code(answer[idx])  # semantic match
+            else 0.1
+            if cb == goal_code_block  # same as prompt => conflict
+            else 0.0
         )
-        else 0.0
-        for idx, c in enumerate(completions)
-    ]
-
-
-def soft_resolve_conflict_reward(
-    completions: List[List[Dict[str, str]]],
-    answer: List[str],
-    **kwargs,
-) -> List[float]:
-    """
-    Same as `resolve_conflict_reward`, but uses normalized Java code for a
-    'soft' semantic match (ignoring comments and whitespace).
-
-    Reward = 1.0 if normalized code blocks match, else 0.0.
-    """
-    return [
-        1.0
-        if (
-            (cb := extract_code_block(extract_answer(c[0]["content"]))) is not None
-            and normalize_java_code(cb) == normalize_java_code(answer[idx])
-        )
-        else 0.0
         for idx, c in enumerate(completions)
     ]
 
@@ -265,9 +237,8 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         reward_funcs=[  # type: ignore
             format_reward,
-            raise_conflict_reward,
-            soft_resolve_conflict_reward,
-            resolve_conflict_reward,
+            java_markdown_reward,
+            merged_conflict_reward,
         ],
         args=training_args,
         train_dataset=dataset["train"],  # type: ignore
