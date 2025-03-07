@@ -23,7 +23,6 @@ from train import (
     merged_conflict_reward,
     format_reward,
     java_markdown_reward,
-    semantic_correctness_reward,
 )
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
