@@ -187,8 +187,7 @@ def normalize_java_code(code: str) -> str:
     return code.strip()
 
 
-def semantic_correctness_reward(
-    prompts: List[List[Dict[str, str]]],
+def soft_resolve_conflict_reward(
     completions: List[List[Dict[str, str]]],
     answer: List[str],
     **kwargs,
@@ -204,17 +203,13 @@ def semantic_correctness_reward(
     extracted_responses = [extract_answer(r) for r in responses]
 
     rewards = []
-    for response in extracted_responses:
+    for idx, response in enumerate(extracted_responses):
         code_block = extract_code_block(response)
         if code_block is None:
             rewards.append(0.0)
         else:
-            goal_code_block = extract_code_block(prompts[0][-1]["content"])
-            if goal_code_block is None:
-                raise ValueError("Code block not found in prompt")
-            # Normalize both code blocks to remove non-semantic differences
             normalized_code = normalize_java_code(code_block)
-            normalized_goal = normalize_java_code(goal_code_block)
+            normalized_goal = normalize_java_code(answer[idx])
             rewards.append(normalized_code == normalized_goal)
     return rewards
 
