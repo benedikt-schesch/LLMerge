@@ -62,7 +62,9 @@ def extract_code_block(text: str) -> Optional[str]:
     return None
 
 
-def log_responses(prompts, responses, answer):
+def log_responses(
+    prompts: List[List[Dict[str, str]]], responses: List[str], answer: List[str]
+) -> None:
     """Log the responses for debugging"""
     q = prompts[0][-1]["content"]
     debug_file = "debug.txt"
@@ -86,39 +88,10 @@ def has_conflict_markers(text: str) -> bool:
     return any(marker in text for marker in CONFLICT_MARKERS)
 
 
-def compute_conflict_reward(
-    prompts: List[List[Dict[str, str]]], code_block: str
-) -> float:
-    """
-    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
-    between the answer block from the response and a reference.
-    """
-    goal_code_block = extract_code_block(prompts[0][-1]["content"])
-    assert goal_code_block is not None, "Code block not found in prompt"
-    sim = code_block == goal_code_block
-    return sim
-
-
-def compute_goal_file_reward(
-    prompts: List[List[Dict[str, str]]],
-    code_block: str,
-    correct_answer_multiplier: float = CORRECT_ANSWER_MULTIPLIER,
-) -> float:
-    """
-    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
-    between the answer block from the response and a reference.
-    """
-    goal_code_block = extract_code_block(prompts[0][-1]["content"])
-    assert goal_code_block is not None, "Code block not found in prompt"
-    sim = code_block == goal_code_block
-    return correct_answer_multiplier * sim if sim == 1.0 else sim
-
-
-def correctness_reward_func(
+def raise_conflict_reward(
     prompts: List[List[Dict[str, str]]],
     completions: List[List[Dict[str, str]]],
     answer: List[str],
-    correct_answer_multiplier: float = CORRECT_ANSWER_MULTIPLIER,
     **kwargs,
 ) -> List[float]:
     """
@@ -142,15 +115,38 @@ def correctness_reward_func(
         code_block = extract_code_block(response)
         if code_block is None:
             rewards.append(0.0)
-        elif has_conflict_markers(code_block):
-            rewards.append(compute_conflict_reward(prompts, code_block))
         else:
-            rewards.append(
-                compute_goal_file_reward(prompts, code_block, correct_answer_multiplier)
-            )
+            goal_code_block = extract_code_block(prompts[0][-1]["content"])
+            if goal_code_block == code_block:
+                rewards.append(0.1)
+            else:
+                rewards.append(0.0)
+    return rewards
 
-    # Square the rewards to amplify the signal
-    rewards = [r**2 for r in rewards]
+
+def resolve_conflict_reward(
+    completions: List[List[Dict[str, str]]],
+    answer: List[str],
+    **kwargs,
+) -> List[float]:
+    """
+    Computes reward as the similarity ratio (acting as a normalized edit distance signal)
+    between the answer block from the response and a reference.
+
+    - If the answer block contains any conflict markers (e.g., <<<<<<<, =======, >>>>>>>),
+      the reference is the code block extracted from the input prompt.
+    - Otherwise, the reference is the expected answer (provided via `answer`).
+    """
+    responses = [completion[0]["content"] for completion in completions]
+    extracted_responses = [extract_answer(r) for r in responses]
+
+    rewards = []
+    for idx, response in enumerate(extracted_responses):
+        code_block = extract_code_block(response)
+        if code_block is None:
+            rewards.append(0.0)
+        else:
+            rewards.append(code_block == answer[idx])
     return rewards
 
 
@@ -168,8 +164,7 @@ def normalize_java_code(code: str) -> str:
     return code.strip()
 
 
-def semantic_correctness_reward(
-    prompts: List[List[Dict[str, str]]],
+def soft_resolve_conflict_reward(
     completions: List[List[Dict[str, str]]],
     answer: List[str],
     **kwargs,
@@ -185,17 +180,13 @@ def semantic_correctness_reward(
     extracted_responses = [extract_answer(r) for r in responses]
 
     rewards = []
-    for response in extracted_responses:
+    for idx, response in enumerate(extracted_responses):
         code_block = extract_code_block(response)
         if code_block is None:
             rewards.append(0.0)
         else:
-            goal_code_block = extract_code_block(prompts[0][-1]["content"])
-            if goal_code_block is None:
-                raise ValueError("Code block not found in prompt")
-            # Normalize both code blocks to remove non-semantic differences
             normalized_code = normalize_java_code(code_block)
-            normalized_goal = normalize_java_code(goal_code_block)
+            normalized_goal = normalize_java_code(answer[idx])
             rewards.append(normalized_code == normalized_goal)
     return rewards
 
@@ -210,7 +201,7 @@ if __name__ == "__main__":
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL,
         max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
-        load_in_4bit=False,  # False for LoRA 16bit
+        load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
         gpu_memory_utilization=0.5,  # Reduce if out of memory
@@ -265,8 +256,9 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         reward_funcs=[  # type: ignore
             format_reward,
-            correctness_reward_func,
-            semantic_correctness_reward,
+            raise_conflict_reward,
+            soft_resolve_conflict_reward,
+            resolve_conflict_reward,
         ],
         args=training_args,
         train_dataset=dataset["train"],  # type: ignore

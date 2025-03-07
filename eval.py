@@ -20,13 +20,11 @@ from train import (
     MAX_SEQ_LENGTH,
     MAX_PROMPT_LENGTH,
     SYSTEM_PROMPT,
-    extract_code_block,
-    compute_conflict_reward,
-    compute_goal_file_reward,
-    has_conflict_markers,
+    resolve_conflict_reward,
+    soft_resolve_conflict_reward,
+    raise_conflict_reward,
     format_reward,
     java_markdown_reward,
-    semantic_correctness_reward,
 )
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
@@ -85,11 +83,11 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     logger.info(f"Loaded {len(dataset)} examples.")
 
     model_name = "unsloth/QwQ-32B"
+    load_in_4bit = True
 
     torch.set_grad_enabled(False)
     output_dir = Path("eval_outputs")
 
-    load_in_4bit = True
     if load_in_4bit:
         output_dir = output_dir / f"{model_name}-loaded-4bit"
     else:
@@ -134,43 +132,31 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
             raise ValueError("Could not find completion in full output.")
 
         # Wrap prompt text into the expected structure.
-        wrapped_completions = [[{"content": completion}]]
-        wrapped_prompts = [[{"content": example["question"]}]]  # type: ignore
+        completions = [[{"content": completion}]]
+        prompts = [[{"content": example["question"]}]]  # type: ignore
+        answers = [example["answer"]]  # type: ignore
 
         # Evaluate the thinking format.
-        if format_reward(wrapped_completions)[0] > 0:
+        if format_reward(completions)[0] > 0:
             count_thinking += 1
 
         # Evaluate the Java markdown formatting.
-        if java_markdown_reward(wrapped_completions)[0] > 0:
+        if java_markdown_reward(completions)[0] > 0:
             count_java_md += 1
 
-        code_block = extract_code_block(completion)
-        if code_block is None:
-            continue
-
-        if (
-            has_conflict_markers(code_block)
-            and compute_conflict_reward(wrapped_prompts, code_block) == 1.0
-        ):
+        # If the model raises a conflict
+        if raise_conflict_reward(prompts, completions, answers)[0] > 0:
             count_conflict_preserved += 1
-        elif (
-            compute_goal_file_reward(
-                wrapped_prompts, code_block, correct_answer_multiplier=1
-            )
-            == 1.0
-        ):
+
+        # If the model resolves the conflict perfectly
+        if resolve_conflict_reward(completions, answers)[0] > 0:
             logger.info(f"Example {idx} resolved perfectly.")
             count_resolved_perfectly += 1
             count_resolved_semantically += 1
-        else:
-            if (
-                semantic_correctness_reward(wrapped_prompts, wrapped_completions, None)[
-                    0
-                ]
-                == 1.0
-            ):
-                count_resolved_semantically += 1
+
+        # If the model resolves the conflict semantically
+        if soft_resolve_conflict_reward(completions, answers)[0] > 0:
+            count_resolved_semantically += 1
 
     # Compute percentages.
     pct_thinking = 100 * count_thinking / total if total > 0 else 0
