@@ -187,7 +187,7 @@ def normalize_java_code(code: str) -> str:
     return code.strip()
 
 
-def soft_correctness_reward(
+def semantic_correctness_reward(
     prompts: List[List[Dict[str, str]]],
     completions: List[List[Dict[str, str]]],
     answer: List[str],
@@ -201,9 +201,6 @@ def soft_correctness_reward(
     # Extract the content responses and the answer block from each response
     responses = [completion[0]["content"] for completion in completions]
     extracted_responses = [extract_answer(r) for r in responses]
-
-    # Log responses for debugging purposes
-    log_responses(prompts, responses, answer)
 
     rewards = []
     for response in extracted_responses:
