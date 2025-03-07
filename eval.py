@@ -9,10 +9,10 @@ Loads the same dataset as in training and computes:
   - % that are correctly resolved
 """
 
-# Import variables and functions from your training script.
 from pathlib import Path
 from tqdm import tqdm
 from loguru import logger
+import unsloth
 from transformers import TextStreamer
 import torch
 from datasets import load_from_disk
@@ -31,6 +31,7 @@ from train import (
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
 logger.add("eval.log", backtrace=True, diagnose=True)
+
 
 def model_inference(example, model, tokenizer, text_streamer):
     """Perform model inference."""
@@ -53,8 +54,9 @@ def model_inference(example, model, tokenizer, text_streamer):
     full_completion = tokenizer.decode(output_tokens[0], skip_special_tokens=False)
     return full_completion
 
+
 def get_model(model_name, load_in_4bit: bool = True):
-    import unsloth
+    """Load the model and tokenizer."""
     # Load the model and tokenizer (using same parameters as in training)
     if "unsloth" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
@@ -73,7 +75,8 @@ def get_model(model_name, load_in_4bit: bool = True):
     text_streamer = TextStreamer(tokenizer)  # type: ignore
     return model, tokenizer, text_streamer
 
-def main():  # pylint: disable=too-many-locals, too-many-statements
+
+def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
     """Main function for evaluation script."""
     # Load the dataset (using the same training data)
     dataset = load_from_disk("merges/repos_50/dataset")["train"]
@@ -84,7 +87,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
     model_name = "unsloth/QwQ-32B"
 
     torch.set_grad_enabled(False)
-    output_dir = Path("eval_ouputs")
+    output_dir = Path("eval_outputs")
 
     load_in_4bit = True
     if load_in_4bit:
@@ -161,7 +164,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements
             count_resolved_perfectly += 1
             count_resolved_semantically += 1
         else:
-            if semantic_correctness_reward(wrapped_prompts, wrapped_completions,None)[0] == 1.0:
+            if (
+                semantic_correctness_reward(wrapped_prompts, wrapped_completions, None)[
+                    0
+                ]
+                == 1.0
+            ):
                 count_resolved_semantically += 1
 
     # Compute percentages.

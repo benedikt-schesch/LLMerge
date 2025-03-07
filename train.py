@@ -31,14 +31,14 @@ def extract_answer(text: str) -> str:
     return text.split("</think>")[-1]
 
 
-def format_reward(completions, **kwargs) -> list[float]:
+def format_reward(completions, **kwargs) -> List[float]:
     """Reward function that checks if the completion has a specific format."""
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(THINKING_PATTERN, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
 
 
-def java_markdown_reward(completions, **kwargs) -> list[float]:
+def java_markdown_reward(completions, **kwargs) -> List[float]:
     """
     Checks if the answer block (extracted via extract_xml_answer) contains Java markdown formatting.
     This version is 'strong' because it only considers the content within the answer block.
@@ -120,7 +120,7 @@ def correctness_reward_func(
     answer: List[str],
     correct_answer_multiplier: float = CORRECT_ANSWER_MULTIPLIER,
     **kwargs,
-) -> list[float]:
+) -> List[float]:
     """
     Computes reward as the similarity ratio (acting as a normalized edit distance signal)
     between the answer block from the response and a reference.
@@ -173,11 +173,12 @@ def semantic_correctness_reward(
     completions: List[List[Dict[str, str]]],
     answer: List[str],
     **kwargs,
-) -> list[float]:
+) -> List[float]:
     """
-    Computes a soft reward based on semantic similarity between the Java code in the response and the
-    goal code block. Instead of checking for strict equality, it normalizes both pieces of code
-    (removing comments and extra whitespace) before comparing, which helps to capture Java semantics.
+    Computes a soft reward based on semantic similarity between the Java code in
+    the response and the goal code block. Instead of checking for strict equality,
+    it normalizes both pieces of code (removing comments and extra whitespace)
+    before comparing, which helps to capture Java semantics.
     """
     # Extract the content responses and the answer block from each response
     responses = [completion[0]["content"] for completion in completions]
