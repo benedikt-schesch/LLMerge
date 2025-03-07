@@ -152,9 +152,9 @@ def merged_conflict_reward(
     """
     # Extract the "goal" code block (the one in the prompt's last message)
     goal_code_block = extract_code_block(prompts[0][-1]["content"])
-    
+
     # Print the responses for debugging
-    print("-" * 20, f"\nResponse:\n{completions[0][0]["content"]}")
+    print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
 
     # Print the responses for debugging
     print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.5,  # Reduce if out of memory
+        gpu_memory_utilization=0.8,  # Reduce if out of memory
     )
 
     model = FastLanguageModel.get_peft_model(
