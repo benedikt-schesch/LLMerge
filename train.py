@@ -192,11 +192,12 @@ def semantic_correctness_reward(
     completions: List[List[Dict[str, str]]],
     answer: List[str],
     **kwargs,
-) -> list[float]:
+) -> List[float]:
     """
-    Computes a soft reward based on semantic similarity between the Java code in the response and the
-    goal code block. Instead of checking for strict equality, it normalizes both pieces of code
-    (removing comments and extra whitespace) before comparing, which helps to capture Java semantics.
+    Computes a soft reward based on semantic similarity between the Java code in
+    the response and the goal code block. Instead of checking for strict equality,
+    it normalizes both pieces of code (removing comments and extra whitespace)
+    before comparing, which helps to capture Java semantics.
     """
     # Extract the content responses and the answer block from each response
     responses = [completion[0]["content"] for completion in completions]

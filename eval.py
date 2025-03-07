@@ -12,6 +12,7 @@ Loads the same dataset as in training and computes:
 from pathlib import Path
 from tqdm import tqdm
 from loguru import logger
+import unsloth
 from transformers import TextStreamer
 import torch
 from datasets import load_from_disk
@@ -27,6 +28,7 @@ from train import (
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
 logger.add("eval.log", backtrace=True, diagnose=True)
+
 
 def model_inference(example, model, tokenizer, text_streamer):
     """Perform model inference."""
@@ -49,8 +51,9 @@ def model_inference(example, model, tokenizer, text_streamer):
     full_completion = tokenizer.decode(output_tokens[0], skip_special_tokens=False)
     return full_completion
 
+
 def get_model(model_name, load_in_4bit: bool = True):
-    import unsloth
+    """Load the model and tokenizer."""
     # Load the model and tokenizer (using same parameters as in training)
     if "unsloth" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
