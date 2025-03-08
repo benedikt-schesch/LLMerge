@@ -153,9 +153,9 @@ def merged_conflict_reward(
     """
     # Extract the "goal" code block (the one in the prompt's last message)
     goal_code_block = extract_code_block(prompts[0][-1]["content"])
-    
+
     # Print the responses for debugging
-    print("-" * 20, f"\nResponse:\n{completions[0][0]["content"]}")
+    print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
 
     return [
         (
