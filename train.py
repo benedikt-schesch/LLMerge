@@ -89,6 +89,7 @@ def extract_answer(text: str) -> str:
     parts = text.split("</think>", 1)
     return parts[-1] if len(parts) > 1 else parts[0]
 
+
 def extract_code_block(text: str) -> Optional[str]:
     """
     Extracts the code block from a markdown-formatted text:
@@ -152,9 +153,6 @@ def merged_conflict_reward(
     """
     # Extract the "goal" code block (the one in the prompt's last message)
     goal_code_block = extract_code_block(prompts[0][-1]["content"])
-    
-    # Print the responses for debugging
-    print("-" * 20, f"\nResponse:\n{completions[0][0]["content"]}")
 
     # Print the responses for debugging
     print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
@@ -172,42 +170,6 @@ def merged_conflict_reward(
             if cb == goal_code_block  # same as prompt => conflict
             else 0.0
         )
-        for idx, c in enumerate(completions)
-    ]
-
-
-def normalize_java_code(code: str) -> str:
-    """
-    Normalizes Java code by removing block comments, line comments, and extra whitespace.
-    This helps to focus on the semantics rather than formatting details.
-    """
-    # Remove block comments (/* ... */)
-    code = re.sub(r"/\*[\s\S]*?\*/", "", code)
-    # Remove line comments (//...)
-    code = re.sub(r"//.*", "", code)
-    # Replace multiple whitespace characters with a single space
-    code = re.sub(r"\s+", " ", code)
-    return code.strip()
-
-
-def soft_resolve_conflict_reward(
-    completions: List[List[Dict[str, str]]],
-    answer: List[str],
-    **kwargs,
-) -> List[float]:
-    """
-    Same as `resolve_conflict_reward`, but uses normalized Java code for a
-    'soft' semantic match (ignoring comments and whitespace).
-
-    Reward = 1.0 if normalized code blocks match, else 0.0.
-    """
-    return [
-        1.0
-        if (
-            (cb := extract_code_block(extract_answer(c[0]["content"]))) is not None
-            and normalize_java_code(cb) == normalize_java_code(answer[idx])
-        )
-        else 0.0
         for idx, c in enumerate(completions)
     ]
 
