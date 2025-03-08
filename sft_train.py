@@ -11,9 +11,9 @@ This script:
 import os
 import argparse
 from datasets import load_from_disk
-from unsloth import FastLanguageModel
+from unsloth import FastLanguageModel, is_bfloat16_supported
 from transformers import TrainingArguments
-from trl import SFTTrainer, is_bfloat16_supported
+from trl import SFTTrainer
 
 from src.variables import (
     MODEL,
