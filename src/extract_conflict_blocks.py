@@ -348,7 +348,7 @@ def process_conflict_file(  # pylint: disable=too-many-locals
 
         conflict_output.write_text(conflict_snippet, encoding="utf-8")
         resolved_output.write_text(resolved_snippet, encoding="utf-8")
-        logger.info(f"Successfully processed conflict block {basename}-{n}")
+        logger.success(f"Successfully processed conflict block {basename}-{n}")
 
 
 def main():
