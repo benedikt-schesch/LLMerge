@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """Builds a dataset from the conflict blocks."""
 
-import argparse
 import os
+import argparse
+import random
 from pathlib import Path
 from typing import Dict, Union, List
+import numpy as np
 from datasets import Dataset, DatasetDict
 from rich.progress import track
 from loguru import logger
+import torch
 from variables import SYSTEM_PROMPT, QUERY_PROMPT
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -20,6 +23,7 @@ def build_query(query: str) -> str:
 
 def load_conflict_dataset(directory: str) -> Dataset:
     """Loads the conflict dataset from the given directory."""
+    # Sort by name deterministically to ensure reproducible dataset creation
     conflict_files = sorted(Path(directory).glob("*.conflict"))
     queries, solutions = [], []
 
@@ -73,8 +77,16 @@ def main():
         "--output_dir", type=str, default="merges/repos_50/filtered_merges"
     )
     parser.add_argument("--test_size", type=float, default=0.2)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
+    )
     args = parser.parse_args()
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+    torch.manual_seed(args.seed)
 
     dataset = prepare_dataset(args.conflict_blocks_dir, args.test_size, args.seed)
     logger.info(f"Train set size: {len(dataset['train'])}")

@@ -20,7 +20,7 @@ list of conflict file IDs.
 """
 
 import argparse
-from concurrent.futures import as_completed, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import os
 import sys
 import shutil
@@ -133,9 +133,7 @@ def reproduce_merge_and_extract_conflicts(
     # Check if cache exists (both subdirectories must be present)
     if conflict_cache_folder.exists() and final_cache_folder.exists():
         logger.info(f"Using cached merge for {merge_sha} from {cache_folder}")
-        cached_conflict_files = sorted(
-            conflict_cache_folder.iterdir(), key=lambda p: p.name
-        )
+        cached_conflict_files = sorted(conflict_cache_folder.iterdir())
         conflicts = []
         for i, cached_file in enumerate(cached_conflict_files):
             conflict_id = f"{merge_id}-{i}"
@@ -175,7 +173,8 @@ def reproduce_merge_and_extract_conflicts(
         logger.info(
             f"Conflict in {left_sha} + {right_sha} => {merge_sha}, files: {conflict_files}"
         )
-        conflict_files.sort()
+        # Sort conflict files by name deterministically
+        conflict_files = sorted(conflict_files)
         result = copy_conflicting_files_and_goal(
             conflict_files=conflict_files,
             final_repo=repo,
@@ -239,7 +238,7 @@ def process_merge(merge_row, output_dir: Path) -> tuple:
     return merge_id, ""
 
 
-def main():
+def main():  # pylint: disable=too-many-statements
     """Main function with two steps: collect merges, then extract conflict files."""
     parser = argparse.ArgumentParser(description="Extract conflict files from merges.")
     parser.add_argument(
@@ -259,6 +258,13 @@ def main():
         default=None,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
+    parser.add_argument(
+        "--seed",
+        required=False,
+        type=int,
+        default=42,
+        help="Random seed for reproducibility (default: 42)",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -268,21 +274,31 @@ def main():
     repos_df = pd.read_csv(args.repos)
     num_workers = os.cpu_count() - 1 if args.n_threads is None else args.n_threads  # type: ignore
 
+    # Ensure deterministic order of repositories
+    repos_df = repos_df.sort_values(by="repository")
+
     # STEP 1: Collect all merges in parallel
     logger.info(
         f"Step 1: Collecting merges for {len(repos_df)} repos using {num_workers} threads..."
     )
 
+    # For deterministic results, process in ordered batches
     result = []
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
-        tasks = [
-            executor.submit(collect_merges, row["repository"], output_dir)
-            for _, row in repos_df.iterrows()
-        ]
+        tasks = {
+            executor.submit(collect_merges, row["repository"], output_dir): i
+            for i, (_, row) in enumerate(repos_df.iterrows())
+        }
+
+        # Process results in deterministic order based on input order
+        futures_by_index = sorted([(index, future) for future, index in tasks.items()])
+        ordered_futures = [f for _, f in futures_by_index]
 
         with Progress() as progress:
-            progress_task = progress.add_task("Collecting merges...", total=len(tasks))
-            for future in as_completed(tasks):
+            progress_task = progress.add_task(
+                "Collecting merges...", total=len(ordered_futures)
+            )
+            for future in ordered_futures:
                 try:
                     result.append(future.result())
                 except Exception as exc:
@@ -300,6 +316,11 @@ def main():
         logger.error("Duplicate merge_commit found in all_merges.csv")
         sys.exit(1)
 
+    # Sort the merge dataframe to ensure deterministic order
+    all_merges_df = all_merges_df.sort_values(by=["repository", "merge_commit"])
+    all_merges_df["merge_idx"] = range(0, len(all_merges_df))
+    all_merges_df.set_index("merge_idx", inplace=True)
+
     # STEP 2: Process each merge in parallel to extract conflict files
     logger.info(
         f"Step 2: Processing {len(all_merges_df)} merges for "
@@ -308,21 +329,30 @@ def main():
     all_merges_df["conflicts"] = ""
 
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = {
+        futures_dict = {
             executor.submit(process_merge, merge_row, output_dir): merge_id
             for merge_id, merge_row in all_merges_df.iterrows()
         }
+
+        # Process results in deterministic order
+        ordered_items = sorted(
+            [(merge_id, future) for future, merge_id in futures_dict.items()]
+        )
+        ordered_futures = [(future, merge_id) for merge_id, future in ordered_items]
+
         with Progress() as progress:
             progress_task = progress.add_task(
-                "Extracting conflicts...", total=len(futures)
+                "Extracting conflicts...", total=len(ordered_futures)
             )
-            # Process each future as it completes.
-            for future in as_completed(futures):
+            # Process each future in deterministic order
+            for future, merge_id in ordered_futures:
                 try:
-                    merge_id, conflict_str = future.result()
-                    all_merges_df.loc[merge_id, "conflicts"] = conflict_str
+                    _, conflict_str = future.result()
+                    all_merges_df.loc[merge_id, "conflicts"] = conflict_str  # type: ignore
                 except timeout_decorator.TimeoutError:
-                    logger.error("Task timed out.")
+                    logger.error(f"Task for merge_id {merge_id} timed out.")
+                except Exception as e:
+                    logger.error(f"Error processing merge_id {merge_id}: {e}")
                 progress.advance(progress_task)
 
     # Combine all results

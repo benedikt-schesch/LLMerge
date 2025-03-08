@@ -29,8 +29,8 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple
 import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import os
+import random
+from concurrent.futures import ThreadPoolExecutor
 
 from loguru import logger
 from rich.progress import Progress
@@ -378,9 +378,26 @@ def main():
     output_dir = Path(args.output_dir)
     shutil.rmtree(output_dir, ignore_errors=True)
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Sort by full path string to ensure deterministic processing order
     conflict_files = sorted(input_dir.rglob("*.conflict"))
     conflict_files = [f for f in conflict_files if "conflict_blocks" not in f.parts]
     logger.info(f"Found {len(conflict_files)} conflict file(s) in {input_dir}")
+
+    # Add seed parameter for reproducibility
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility",
+    )
+    parser.add_argument(
+        "--n_threads",
+        type=int,
+        default=8,
+        help="Number of threads for parallel processing (default: 8)",
+    )
+    args = parser.parse_args()
+    random.seed(args.seed)
 
     with Progress() as progress:
         task = progress.add_task(
@@ -396,10 +413,27 @@ def main():
                 cfile, final_file, args.context, output_dir=output_dir
             )
 
-        with ThreadPoolExecutor(max_workers=os.cpu_count() - 1) as executor:  # type: ignore
-            futures = {executor.submit(process, cfile) for cfile in conflict_files}
-            for _ in as_completed(futures):
-                progress.advance(task)
+        # Use fixed number of threads with ordered processing
+        num_workers = args.n_threads
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Create futures dictionary with index to preserve order
+            futures_dict = {
+                executor.submit(process, cfile): i
+                for i, cfile in enumerate(conflict_files)
+            }
+
+            # Process results in deterministic order
+            ordered_futures = [
+                f for _, f in sorted([(i, f) for f, i in futures_dict.items()])
+            ]
+
+            for future in ordered_futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error(f"Error processing conflict file: {e}")
+                finally:
+                    progress.advance(task)
 
     logger.info(f"Done processing conflict files. Output is in {output_dir}")
     print(f"Done processing conflict files. Output is in {output_dir}")
