@@ -25,15 +25,15 @@ This script:
        where <basename> is the base of the input file (e.g. "1a") and n is the conflict number.
 """
 
+import os
 import argparse
 from pathlib import Path
 from typing import List, Tuple
 import shutil
 import random
-from concurrent.futures import ThreadPoolExecutor
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 from loguru import logger
-from rich.progress import Progress
 
 logger.add("run.log", backtrace=True, diagnose=True)
 
@@ -372,6 +372,18 @@ def main():
         default=5,
         help="Number of context lines to include in the conflict snippet",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility",
+    )
+    parser.add_argument(
+        "--n_threads",
+        type=int,
+        default=0,
+        help="Number of threads for parallel processing (default: 8)",
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -382,58 +394,39 @@ def main():
     conflict_files = sorted(input_dir.rglob("*.conflict"))
     conflict_files = [f for f in conflict_files if "conflict_blocks" not in f.parts]
     logger.info(f"Found {len(conflict_files)} conflict file(s) in {input_dir}")
-
-    # Add seed parameter for reproducibility
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Random seed for reproducibility",
-    )
-    parser.add_argument(
-        "--n_threads",
-        type=int,
-        default=8,
-        help="Number of threads for parallel processing (default: 8)",
-    )
-    args = parser.parse_args()
     random.seed(args.seed)
 
-    with Progress() as progress:
-        task = progress.add_task(
-            "Processing conflict files...", total=len(conflict_files)
+
+    def process(cfile):
+        final_file = cfile.with_suffix(".final_merged")
+        if not final_file.exists():
+            logger.warning(f"No matching .final_merged for {cfile}")
+            return
+        process_conflict_file(
+            cfile, final_file, args.context, output_dir=output_dir
         )
 
-        def process(cfile):
-            final_file = cfile.with_suffix(".final_merged")
-            if not final_file.exists():
-                logger.warning(f"No matching .final_merged for {cfile}")
-                return
-            process_conflict_file(
-                cfile, final_file, args.context, output_dir=output_dir
-            )
+    # Use fixed number of threads with ordered processing
+    num_workers = args.n_threads if args.n_threads > 0 else os.cpu_count() - 1
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        # Create futures dictionary with index to preserve order
+        futures_dict = {
+            executor.submit(process, cfile): i
+            for i, cfile in enumerate(conflict_files)
+        }
 
-        # Use fixed number of threads with ordered processing
-        num_workers = args.n_threads
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            # Create futures dictionary with index to preserve order
-            futures_dict = {
-                executor.submit(process, cfile): i
-                for i, cfile in enumerate(conflict_files)
-            }
+        # Process results in deterministic order
+        ordered_futures = [
+            f for _, f in sorted([(i, f) for f, i in futures_dict.items()])
+        ]
 
-            # Process results in deterministic order
-            ordered_futures = [
-                f for _, f in sorted([(i, f) for f, i in futures_dict.items()])
-            ]
-
-            for future in ordered_futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.error(f"Error processing conflict file: {e}")
-                finally:
-                    progress.advance(task)
+        for future in tqdm(ordered_futures):
+            try:
+                future.result()
+            except Exception as e:
+                logger.error(f"Error processing conflict file: {e}")
+            finally:
+                progress.advance(task)
 
     logger.info(f"Done processing conflict files. Output is in {output_dir}")
     print(f"Done processing conflict files. Output is in {output_dir}")
