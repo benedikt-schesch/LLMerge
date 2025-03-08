@@ -38,7 +38,7 @@ import shutil
 import pandas as pd
 from transformers import AutoTokenizer
 from loguru import logger
-from rich.progress import track
+from tqdm import tqdm
 from build_dataset import build_query
 from variables import MODEL, MAX_PROMPT_LENGTH
 
@@ -204,7 +204,7 @@ def main():  # pylint: disable=too-many-statements, too-many-locals
     rows = []
     tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
 
-    for conflict_path in track(conflict_files):
+    for conflict_path in tqdm(conflict_files):
         # For each .conflict, find the corresponding .resolved_conflict file
         resolved_path = conflict_path.with_suffix(".resolved_conflict")
         if not resolved_path.exists():

@@ -2,4 +2,4 @@ datasets
 GitPython
 loguru
 pandas
-rich
+tqdm
