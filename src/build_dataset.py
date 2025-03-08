@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Union, List
 import numpy as np
 from datasets import Dataset, DatasetDict
-from rich.progress import track
+from tqdm import tqdm
 from loguru import logger
 import torch
 from variables import SYSTEM_PROMPT, QUERY_PROMPT
@@ -27,7 +27,7 @@ def load_conflict_dataset(directory: str) -> Dataset:
     conflict_files = sorted(Path(directory).glob("*.conflict"))
     queries, solutions = [], []
 
-    for conflict_file in track(
+    for conflict_file in tqdm(
         conflict_files, description="Processing conflict files..."
     ):
         resolved_file = conflict_file.with_name(
