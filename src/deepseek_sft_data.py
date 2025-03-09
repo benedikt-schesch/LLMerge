@@ -219,13 +219,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="merges/repos_50/dataset",
+        default="merges/repos_reapar_1000/dataset",
         help="Path to the dataset",
     )
     parser.add_argument(
         "--limit",
         type=int,
-        default=2,
+        default=100,
         help="Limit the number of examples to process",
     )
     args = parser.parse_args()
