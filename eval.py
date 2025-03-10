@@ -9,6 +9,7 @@ Loads the same dataset as in training and computes:
   - % that are correctly resolved
 """
 
+import argparse
 from pathlib import Path
 from tqdm import tqdm
 from loguru import logger
@@ -74,17 +75,53 @@ def get_model(model_name, load_in_4bit: bool = True):
 
 def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
     """Main function for evaluation script."""
+    parser = argparse.ArgumentParser(description="Evaluation script for merge outputs.")
+    parser.add_argument(
+        "--model_name", type=str, default="unsloth/QwQ-32B", help="Model name to load"
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        default="merges/repos_50/dataset",
+        help="Path to the dataset on disk",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="eval_outputs",
+        help="Directory to store evaluation outputs",
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="train",
+        choices=["train", "test"],
+        help="Dataset split to evaluate",
+    )
+    parser.add_argument(
+        "--load_in_4bit",
+        type=lambda x: str(x).lower() == "true",
+        default=True,
+        help="Load model in 4bit mode",
+    )
+    args = parser.parse_args()
+
     # Load the dataset (using the same training data)
-    dataset = load_from_disk("merges/repos_50/dataset")["train"]
+    dataset = load_from_disk(args.dataset_path)[args.split]
 
     logger.info("Starting evaluation...")
     logger.info(f"Loaded {len(dataset)} examples.")
 
-    model_name = "unsloth/QwQ-32B"
-    load_in_4bit = True
+    model_name = args.model_name
+    load_in_4bit = args.load_in_4bit
 
     torch.set_grad_enabled(False)
-    output_dir = Path("eval_outputs")
+    output_dir = Path(args.output_dir)
+
+    # Extract dataset name from dataset_path, assuming format 'merges/{dataset_name}/dataset'
+    parts = args.dataset_path.split("/")
+    dataset_name = parts[1] if len(parts) > 2 else "default"
+    output_dir = output_dir / dataset_name / args.split
 
     if load_in_4bit:
         output_dir = output_dir / f"{model_name}-loaded-4bit"
@@ -111,9 +148,11 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
 
         output_file_path = output_dir / f"example_{idx}.txt"
         if output_file_path.exists():
+            logger.info(f"Loading example {idx} from file...")
             with open(output_file_path, "r", encoding="utf-8") as f:
                 full_completion = f.read()
         else:
+            logger.info(f"Processing example {idx}...")
             # Load the model lazily if not already loaded.
             if model is None:
                 model, tokenizer, text_streamer = get_model(model_name, load_in_4bit)
