@@ -20,7 +20,7 @@ list of conflict file IDs.
 """
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import sys
 import shutil
@@ -344,7 +344,6 @@ def main():  # pylint: disable=too-many-statements
                 logger.error(f"Task for merge_id {merge_id} timed out.")
             except Exception as e:
                 logger.error(f"Error processing merge_id {merge_id}: {e}")
-            progress.advance(progress_task)
 
     # Combine all results
     all_merges_df = all_merges_df[all_merges_df["conflicts"] != ""]  # pylint: disable=use-implicit-booleaness-not-comparison-to-string

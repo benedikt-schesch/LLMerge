@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import List, Tuple
 import shutil
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from loguru import logger
 
@@ -396,23 +396,19 @@ def main():
     logger.info(f"Found {len(conflict_files)} conflict file(s) in {input_dir}")
     random.seed(args.seed)
 
-
     def process(cfile):
         final_file = cfile.with_suffix(".final_merged")
         if not final_file.exists():
             logger.warning(f"No matching .final_merged for {cfile}")
             return
-        process_conflict_file(
-            cfile, final_file, args.context, output_dir=output_dir
-        )
+        process_conflict_file(cfile, final_file, args.context, output_dir=output_dir)
 
     # Use fixed number of threads with ordered processing
     num_workers = args.n_threads if args.n_threads > 0 else os.cpu_count() - 1
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         # Create futures dictionary with index to preserve order
         futures_dict = {
-            executor.submit(process, cfile): i
-            for i, cfile in enumerate(conflict_files)
+            executor.submit(process, cfile): i for i, cfile in enumerate(conflict_files)
         }
 
         # Process results in deterministic order
@@ -425,8 +421,6 @@ def main():
                 future.result()
             except Exception as e:
                 logger.error(f"Error processing conflict file: {e}")
-            finally:
-                progress.advance(task)
 
     logger.info(f"Done processing conflict files. Output is in {output_dir}")
     print(f"Done processing conflict files. Output is in {output_dir}")
