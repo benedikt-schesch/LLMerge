@@ -25,7 +25,6 @@ This script:
        where <basename> is the base of the input file (e.g. "1a") and n is the conflict number.
 """
 
-import os
 import argparse
 from pathlib import Path
 from typing import List, Tuple
@@ -34,6 +33,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from loguru import logger
+from utils import get_num_workers
 
 logger.add("run.log", backtrace=True, diagnose=True)
 
@@ -404,7 +404,8 @@ def main():
         process_conflict_file(cfile, final_file, args.context, output_dir=output_dir)
 
     # Use fixed number of threads with ordered processing
-    num_workers = args.n_threads if args.n_threads > 0 else os.cpu_count() - 1
+    num_workers = get_num_workers(args.n_threads)
+
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         # Create futures dictionary with index to preserve order
         futures_dict = {

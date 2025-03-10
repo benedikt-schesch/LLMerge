@@ -3,6 +3,7 @@
 
 from typing import Optional
 import re
+import os
 
 JAVA_MARKDOWN_RE = re.compile(r"```java\n(.*?)\n```", re.DOTALL)
 
@@ -12,6 +13,16 @@ LINE_COMMENT_RE = re.compile(r"//.*")
 WHITESPACE_RE = re.compile(r"\s+")
 
 CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
+
+
+def get_num_workers(n_threads: int) -> int:
+    """Get the number of workers for parallel processing."""
+    if n_threads > 0:
+        return n_threads
+    os_cpu_count = os.cpu_count()
+    if os_cpu_count is None:
+        return 1
+    return os_cpu_count - 1
 
 
 def normalize_java_code(code: str) -> str:

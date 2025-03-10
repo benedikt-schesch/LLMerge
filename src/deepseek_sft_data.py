@@ -171,7 +171,7 @@ def process_dataset(  # pylint: disable=too-many-locals
         max_workers=parallel_requests
     ) as executor:
         future_to_idx = {
-            executor.submit(process_example, idx, example): idx
+            executor.submit(process_example, idx, example): idx  # type: ignore
             for idx, example in enumerate(dataset)
         }
         for future in tqdm(

@@ -21,7 +21,6 @@ list of conflict file IDs.
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import os
 import sys
 import shutil
 from pathlib import Path
@@ -33,6 +32,7 @@ from tqdm import tqdm
 import timeout_decorator
 
 from find_merges import get_repo, get_merges
+from utils import get_num_workers
 
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -272,7 +272,7 @@ def main():  # pylint: disable=too-many-statements
     (output_dir / "conflict_files/cache").mkdir(parents=True, exist_ok=True)
 
     repos_df = pd.read_csv(args.repos)
-    num_workers = os.cpu_count() - 1 if args.n_threads is None else args.n_threads  # type: ignore
+    num_workers = num_workers = get_num_workers(args.n_threads)
 
     # Ensure deterministic order of repositories
     repos_df = repos_df.sort_values(by="repository")
