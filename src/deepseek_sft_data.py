@@ -22,7 +22,7 @@ from tqdm import tqdm
 from datasets import load_from_disk
 from loguru import logger
 from openai import OpenAI
-from utils import (
+from src.utils import (
     extract_code_block,
     normalize_java_code,
 )
@@ -61,27 +61,50 @@ def save_to_cache(cache_key: str, response: Dict[str, str]) -> None:
         json.dump(response, file, indent=4)
 
 
-def query_deepseek_api(prompt: str) -> Dict[str, str]:
-    """Query the DeepSeek R1 API for conflict resolution."""
+def query_deepseek_api(prompt: str) -> Optional[Dict[str, str]]:
+    """Query the DeepSeek R1 API for conflict resolution with retries."""
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
         logger.error("DEEPSEEK_API_KEY environment variable not set")
         raise ValueError("DEEPSEEK_API_KEY key not set")
     client = OpenAI(api_key=api_key, base_url=DEEPSEEK_API_URL)
 
-    response = client.chat.completions.create(
-        model="deepseek-reasoner",
-        messages=[{"role": "user", "content": prompt}],  # type: ignore
-        stream=False,
-    )
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-reasoner",
+                messages=[{"role": "user", "content": prompt}],  # type: ignore
+                stream=False,
+            )
 
-    reasoning = response.choices[0].message.reasoning_content  # type: ignore
-    result = response.choices[0].message.content
+            reasoning = response.choices[0].message.reasoning_content  # type: ignore
+            result = response.choices[0].message.content
 
-    if reasoning is None or result is None:
-        raise ValueError("Response is missing reasoning or content")
+            if reasoning is None or result is None:
+                raise ValueError("Response is missing reasoning or content")
 
-    return {"prompt": prompt, "reasoning": reasoning, "result": result}
+            return {"prompt": prompt, "reasoning": reasoning, "result": result}
+
+        except Exception as e:
+            logger.error(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                time.sleep(2)  # Short delay before retry
+            else:
+                raise  # Raise exception after 3 failed attempts
+    raise ValueError("Failed to query DeepSeek API after 3 attempts")
+
+
+def cached_query_deepseek_api(prompt: str) -> Optional[Dict[str, str]]:
+    """Query the DeepSeek R1 API with caching."""
+    cache_key = get_cache_key(prompt)
+    cached_response = load_from_cache(cache_key)
+    if cached_response:
+        logger.info(f"Using cached response for prompt: {prompt}")
+        return cached_response
+    response = query_deepseek_api(prompt)
+    if response:
+        save_to_cache(cache_key, response)
+    return response
 
 
 def evaluate_resolution(
@@ -115,21 +138,9 @@ def process_example(
 ) -> Optional[Dict[str, str | bool | int]]:
     """Process a single example and evaluate the resolution."""
     prompt = example["question"]
-    cache_key = get_cache_key(prompt)
-    cached_response = load_from_cache(cache_key)
-    if cached_response:
-        logger.info(f"Using cached response for example {idx}")
-        response = cached_response
-    else:
-        logger.info(f"Querying DeepSeek API for example {idx}")
-        try:
-            response = query_deepseek_api(prompt)
-            if response:
-                save_to_cache(cache_key, response)
-        except Exception as e:
-            logger.error(f"Failed to get response for example {idx}: {e}")
-            return None
-        time.sleep(1)  # Rate limiting
+    response = cached_query_deepseek_api(prompt)
+    if response is None:
+        raise ValueError("Response is None")
     resolution_text = response["result"]
     answer = example["answer"]
     output_file = OUTPUT_DIR / f"example_{idx}.txt"
@@ -154,15 +165,18 @@ def process_example(
 
 
 def process_dataset(  # pylint: disable=too-many-locals
-    dataset_path: Path, limit: Optional[int] = None, parallel_requests: int = 16
+    dataset_path: Path,
+    limit: Optional[int] = None,
+    parallel_requests: int = 16,
+    split: str = "test",
 ):
     """Process the dataset and generate SFT data."""
     # Load dataset
-    dataset = load_from_disk(dataset_path)["train"]
+    dataset = load_from_disk(dataset_path)[split]
     logger.info(f"Loaded dataset with {len(dataset)} examples")
 
     # Limit the number of examples if specified
-    if limit:
+    if limit is not None and limit > 0:
         dataset = dataset.select(range(min(limit, len(dataset))))  # type: ignore
         logger.info(f"Limited to {len(dataset)} examples")
 
@@ -224,15 +238,22 @@ if __name__ == "__main__":
     parser.add_argument(
         "--limit",
         type=int,
-        default=500,
+        default=-1,
         help="Limit the number of examples to process",
     )
     parser.add_argument(
         "--parallel-requests",
         type=int,
-        default=16,
+        default=32,
         help="Number of parallel requests to the DeepSeek API",
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        choices=["train", "test"],
+        default="train",
+        help="Dataset split to process (train or test)",
     )
     args = parser.parse_args()
 
-    process_dataset(args.dataset, args.limit, args.parallel_requests)
+    process_dataset(args.dataset, args.limit, args.parallel_requests, args.split)
