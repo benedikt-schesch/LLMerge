@@ -15,6 +15,7 @@ import csv
 import time
 import argparse
 import hashlib
+import concurrent.futures
 from typing import Tuple, Optional, Dict
 from pathlib import Path
 from tqdm import tqdm
@@ -109,8 +110,51 @@ def evaluate_resolution(
     return False, "incorrect_resolution"
 
 
+def process_example(
+    idx: int, example: Dict[str, str]
+) -> Optional[Dict[str, str | bool | int]]:
+    """Process a single example and evaluate the resolution."""
+    prompt = example["question"]
+    cache_key = get_cache_key(prompt)
+    cached_response = load_from_cache(cache_key)
+    if cached_response:
+        logger.info(f"Using cached response for example {idx}")
+        response = cached_response
+    else:
+        logger.info(f"Querying DeepSeek API for example {idx}")
+        try:
+            response = query_deepseek_api(prompt)
+            if response:
+                save_to_cache(cache_key, response)
+        except Exception as e:
+            logger.error(f"Failed to get response for example {idx}: {e}")
+            return None
+        time.sleep(1)  # Rate limiting
+    resolution_text = response["result"]
+    answer = example["answer"]
+    output_file = OUTPUT_DIR / f"example_{idx}.txt"
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(
+            f"PROMPT:\n{prompt}\n\nRESPONSE:\n{resolution_text}\n\nEXPECTED:\n{answer}"
+        )
+    try:
+        is_correct, match_type = evaluate_resolution(prompt, resolution_text, answer)
+    except Exception as e:
+        logger.error(f"Error processing response for example {idx}: {e}")
+        return None
+    logger.info(
+        f"Example {idx}: {'Correct' if is_correct else 'Incorrect'} ({match_type})"
+    )
+    return {
+        "example_id": idx,
+        "is_correct": is_correct,
+        "match_type": match_type,
+        "output_file": output_file.name,
+    }
+
+
 def process_dataset(  # pylint: disable=too-many-locals
-    dataset_path: Path, limit: Optional[int] = None
+    dataset_path: Path, limit: Optional[int] = None, parallel_requests: int = 16
 ):
     """Process the dataset and generate SFT data."""
     # Load dataset
@@ -123,66 +167,21 @@ def process_dataset(  # pylint: disable=too-many-locals
         logger.info(f"Limited to {len(dataset)} examples")
 
     results = []
-
-    # Process each example
-    example: Dict[str, str]
-    for idx, example in enumerate(tqdm(dataset, desc="Processing conflicts")):  # type: ignore
-        # Prepare prompt with query template
-        prompt = example["question"]
-        cache_key = get_cache_key(prompt)
-
-        # Check cache first
-        cached_response = load_from_cache(cache_key)
-
-        if cached_response:
-            logger.info(f"Using cached response for example {idx}")
-            reponse = cached_response
-        else:
-            logger.info(f"Querying DeepSeek API for example {idx}")
-            reponse = query_deepseek_api(prompt)
-
-            if reponse:
-                save_to_cache(cache_key, reponse)
-            else:
-                logger.error(f"Failed to get response for example {idx}")
-                continue
-
-            # Rate limiting - be nice to the API
-            time.sleep(1)
-
-        # Extract resolution from response
-        try:
-            resolution_text = reponse["result"]
-            answer = example["answer"]
-
-            # Save the full response
-            output_file = OUTPUT_DIR / f"example_{idx}.txt"
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(
-                    f"PROMPT:\n{prompt}\n\nRESPONSE:\n{resolution_text}\n\nEXPECTED:\n{answer}"
-                )
-
-            # Evaluate if resolution is correct
-            is_correct, match_type = evaluate_resolution(
-                prompt, resolution_text, answer
-            )
-
-            # Add to results
-            results.append(
-                {
-                    "example_id": idx,
-                    "is_correct": is_correct,
-                    "match_type": match_type,
-                    "output_file": output_file.name,
-                }
-            )
-
-            logger.info(
-                f"Example {idx}: {'Correct' if is_correct else 'Incorrect'} ({match_type})"
-            )
-
-        except (KeyError, IndexError) as e:
-            logger.error(f"Error processing response for example {idx}: {e}")
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=parallel_requests
+    ) as executor:
+        future_to_idx = {
+            executor.submit(process_example, idx, example): idx
+            for idx, example in enumerate(dataset)
+        }
+        for future in tqdm(
+            concurrent.futures.as_completed(future_to_idx),
+            total=len(future_to_idx),
+            desc="Processing conflicts",
+        ):
+            result = future.result()
+            if result is not None:
+                results.append(result)
 
     # Write results to CSV
     with open(RESULTS_FILE, "w", newline="", encoding="utf-8") as f:
@@ -219,15 +218,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="merges/repos_reapar_1000/dataset",
+        default="merges/repos_reaper_1000/dataset",
         help="Path to the dataset",
     )
     parser.add_argument(
         "--limit",
         type=int,
-        default=100,
+        default=500,
         help="Limit the number of examples to process",
+    )
+    parser.add_argument(
+        "--parallel-requests",
+        type=int,
+        default=16,
+        help="Number of parallel requests to the DeepSeek API",
     )
     args = parser.parse_args()
 
-    process_dataset(args.dataset, args.limit)
+    process_dataset(args.dataset, args.limit, args.parallel_requests)

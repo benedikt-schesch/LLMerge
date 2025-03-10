@@ -27,9 +27,7 @@ def load_conflict_dataset(directory: str) -> Dataset:
     conflict_files = sorted(Path(directory).glob("*.conflict"))
     queries, solutions = [], []
 
-    for conflict_file in tqdm(
-        conflict_files, description="Processing conflict files..."
-    ):
+    for conflict_file in tqdm(conflict_files):
         resolved_file = conflict_file.with_name(
             conflict_file.stem + ".resolved_conflict"
         )
