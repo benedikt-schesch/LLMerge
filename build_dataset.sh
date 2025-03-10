@@ -13,6 +13,7 @@ RUN_GET_EXTRACT=0
 RUN_METRICS=0
 RUN_BUILD=0
 KEEP_FLAG=""
+TEST_SIZE="0.2"
 
 # Parse flags
 while [[ "$#" -gt 0 ]]; do
@@ -21,6 +22,10 @@ while [[ "$#" -gt 0 ]]; do
         -m) RUN_METRICS=1 ;;
         -b) RUN_BUILD=1 ;;
         -keep_trivial_resolution) KEEP_FLAG="-keep_trivial_resolution" ;;
+        --test_size)
+            TEST_SIZE="$2"
+            shift
+            ;;
         --) shift; break ;; # Stop processing options
         -*)
             echo "Invalid option: $1" >&2
@@ -61,7 +66,9 @@ fi
 
 if [ $RUN_METRICS -eq 1 ]; then
     echo "Running metrics_conflict_blocks.py..."
-    rm -r "$OUT_DIR/filtered_dataset"
+    if [ -d "$OUT_DIR/filtered_dataset" ]; then
+        rm -r "$OUT_DIR/filtered_dataset"
+    fi
     python3 src/metrics_conflict_blocks.py \
         --input_dir "$OUT_DIR/conflict_blocks" \
         --filtered_output_dir "$OUT_DIR/filtered_dataset" \
@@ -70,6 +77,12 @@ fi
 
 if [ $RUN_BUILD -eq 1 ]; then
     echo "Running build_dataset.py..."
+    if [ -d "$OUT_DIR/dataset" ]; then
+        rm -r "$OUT_DIR/dataset"
+    fi
     rm -r "$OUT_DIR/dataset"
-    python3 src/build_dataset.py --conflict_blocks_dir "$OUT_DIR/filtered_dataset" --output_dir "$OUT_DIR/dataset"
+    python3 src/build_dataset.py \
+        --conflict_blocks_dir "$OUT_DIR/filtered_dataset" \
+        --output_dir "$OUT_DIR/dataset" \
+        --test_size "$TEST_SIZE"
 fi

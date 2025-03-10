@@ -57,6 +57,18 @@ def prepare_dataset(
 ) -> DatasetDict:
     """Prepare the dataset for training and testing."""
     dataset = load_conflict_dataset(directory)
+
+    # Handle edge cases for test_size 0 or 1
+    if not test_size:
+        # All data in train, test empty
+        dataset = dataset.map(format_conversation)
+        empty_test = dataset.select([])
+        return DatasetDict({"train": dataset, "test": empty_test})
+    if test_size == 1:
+        # All data in test, train empty
+        dataset = dataset.map(format_conversation)
+        empty_train = dataset.select([])
+        return DatasetDict({"train": empty_train, "test": dataset})
     splits = dataset.train_test_split(test_size=test_size, seed=seed)
     splits["train"] = splits["train"].map(format_conversation)
     splits["test"] = splits["test"].map(format_conversation)

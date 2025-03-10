@@ -45,6 +45,11 @@ PYTHON_GIL=0 ./build_dataset_small.sh
 ./build_dataset_small.sh
 ```
 
+## Test set construction
+
+```bash
+
+
 ## Code Structure
 
 ```mermaid
