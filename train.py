@@ -133,10 +133,10 @@ def merged_conflict_reward(
             0.0
             if (cb := extract_code_block(extract_answer(c[0]["content"]))) is None
             else 1.0
-            if cb == answer[idx]  # exact match
+            if cb == answer[idx].strip()  # exact match
             else 0.5
             if normalize_java_code(cb)
-            == normalize_java_code(answer[idx])  # semantic match
+            == normalize_java_code(answer[idx].strip())  # semantic match
             else 0.1
             if cb == goal_code_block  # same as prompt => conflict
             else 0.0

@@ -12,7 +12,6 @@ for model_name in \
     unsloth/QwQ-32B
 do
     echo "Evaluating model: $model_name"
-    rm -rf ~/.cache/
     python3 eval.py \
         --model_name "$model_name" \
         --dataset_path "merges/repos_reaper_test/dataset" \
