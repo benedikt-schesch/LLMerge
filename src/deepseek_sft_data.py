@@ -1,159 +1,109 @@
 # -*- coding: utf-8 -*-
-"""Generate SFT dataset using DeepSeek R1 API for conflict resolution.
+"""Generate SFT dataset with exact matches only."""
 
-This script:
-1. Loads a dataset with merge conflicts
-2. Queries the DeepSeek R1 API to resolve each conflict
-3. Caches API responses to avoid redundant calls
-4. Creates a dataset of (conflict, resolution, correct/incorrect) tuples
-5. Outputs both the full responses and a CSV summary
-"""
-
-import csv
 import argparse
 import concurrent.futures
-from typing import Tuple, Optional, Dict
 from pathlib import Path
+from typing import Dict, Optional, List
 from tqdm import tqdm
-from datasets import load_from_disk
-from loguru import logger
-from utils import (
-    extract_code_block,
-    normalize_java_code,
-    cached_query_deepseek_api,
-)
+from datasets import load_from_disk, Dataset
+from transformers import AutoTokenizer
+from utils import extract_code_block, normalize_java_code, cached_query_deepseek_api
+from variables import MAX_SEQUENCE_LENGTH, MODEL_NAME, SYSTEM_PROMPT
 
-# Configure logger
-logger.remove()
-logger.add("deepseek_sft.log", level="INFO")
-logger.add(lambda msg: tqdm.write(msg, end=""), level="INFO")
-
-OUTPUT_DIR = Path("deepseek_sft")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-RESULTS_FILE = OUTPUT_DIR / "results.csv"
+# Initialize tokenizer
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 
-def evaluate_resolution(
-    prompt: str, resolution: str, expected_answer: str
-) -> Tuple[bool, str]:
-    """Evaluate if the resolution is correct."""
-    # Extract code block from the resolution
+def evaluate_resolution(resolution: str, expected_answer: str) -> str:
+    """
+    Return the evaluation result for the resolution.
+    """
     code_block = extract_code_block(resolution)
-
     if code_block is None:
-        return False, "No code block found"
-
-    # Check for exact match
-    if code_block == expected_answer:
-        return True, "exact_match"
-
-    # Check for semantic match (ignoring comments/whitespace)
+        return "No code block found"
+    if code_block.strip() == expected_answer.strip():
+        return "exact_match"
     if normalize_java_code(code_block) == normalize_java_code(expected_answer):
-        return True, "semantic_match"
-
-    # Check if conflict markers are still present
-    ground_truth_conflict_markers = extract_code_block(prompt)
-    if code_block == ground_truth_conflict_markers:
-        return False, "conflict_preserved"
-
-    return False, "incorrect_resolution"
+        return "semantic_match"
+    return "incorrect_resolution"
 
 
-def process_example(
-    idx: int, example: Dict[str, str]
-) -> Optional[Dict[str, str | bool | int]]:
-    """Process a single example and evaluate the resolution."""
-    prompt = example["question"]
-    response = cached_query_deepseek_api(prompt)
+def process_example(example: Dict[str, str]) -> Optional[Dict[str, str]]:
+    """
+    Call the API for a single example and return the formatted text only if the resolution
+    is an exact match.
+    """
+    prompt: str = example["question"]
+    response: Optional[Dict[str, str]] = cached_query_deepseek_api(prompt)
     if response is None:
-        raise ValueError("Response is None")
-    resolution_text = response["result"]
-    answer = example["answer"]
-    output_file = OUTPUT_DIR / f"example_{idx}.txt"
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(
-            f"PROMPT:\n{prompt}\n\nRESPONSE:\n{resolution_text}\n\nEXPECTED:\n{answer}"
-        )
-    try:
-        is_correct, match_type = evaluate_resolution(prompt, resolution_text, answer)
-    except Exception as e:
-        logger.error(f"Error processing response for example {idx}: {e}")
         return None
-    logger.info(
-        f"Example {idx}: {'Correct' if is_correct else 'Incorrect'} ({match_type})"
-    )
-    return {
-        "example_id": idx,
-        "is_correct": is_correct,
-        "match_type": match_type,
-        "output_file": output_file.name,
-    }
+    resolution_text: str = response["result"]
+    reasoning_text: str = response["reasoning"]
+    answer: str = example["answer"]
+    match_type = evaluate_resolution(resolution_text, answer)
+    if match_type == "exact_match":
+        resolution_full_text = (
+            f"<think>\n{reasoning_text}</think>\n{resolution_text}\n\n"
+        )
+        conversations = [
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": resolution_full_text},
+            ]
+        ]
+        text = [
+            tokenizer.apply_chat_template(
+                convo, tokenize=False, add_generation_prompt=False
+            )
+            for convo in conversations
+        ]
+        return {"text": text[0]}
+    return None
 
 
-def process_dataset(  # pylint: disable=too-many-locals
+def process_dataset(
     dataset_path: Path,
     limit: Optional[int] = None,
     parallel_requests: int = 16,
     split: str = "test",
-):
-    """Process the dataset and generate SFT data."""
-    # Load dataset
-    dataset = load_from_disk(dataset_path)[split]
-    logger.info(f"Loaded dataset with {len(dataset)} examples")
+    save_dir: str = "my_sft_dataset",
+) -> None:
+    """
+    Process the dataset, filter examples with exact match resolutions, build the final SFT dataset,
+    and save it to disk.
+    """
+    ds = load_from_disk(dataset_path)[split]
+    if limit is not None:
+        ds = ds.select(range(min(limit, len(ds))))
 
-    # Limit the number of examples if specified
-    if limit is not None and limit > 0:
-        dataset = dataset.select(range(min(limit, len(dataset))))  # type: ignore
-        logger.info(f"Limited to {len(dataset)} examples")
-
-    results = []
+    results: List[Dict[str, str]] = []
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=parallel_requests
     ) as executor:
-        future_to_idx = {
-            executor.submit(process_example, idx, example): idx  # type: ignore
-            for idx, example in enumerate(dataset)
-        }
+        futures = [executor.submit(process_example, example) for example in ds]
         for future in tqdm(
-            concurrent.futures.as_completed(future_to_idx),
-            total=len(future_to_idx),
-            desc="Processing conflicts",
+            concurrent.futures.as_completed(futures),
+            total=len(futures),
+            desc="Processing examples",
         ):
-            result = future.result()
-            if result is not None:
-                results.append(result)
+            res = future.result()
+            if res is not None:
+                text = res["text"]
+                # Filter out samples that exceed the max sequence length.
+                tokens = tokenizer(text, truncation=False, add_special_tokens=False)
+                if len(tokens["input_ids"]) <= MAX_SEQUENCE_LENGTH:
+                    results.append(res)
 
-    # Write results to CSV
-    with open(RESULTS_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["example_id", "is_correct", "match_type", "output_file"]
-        )
-        writer.writeheader()
-        writer.writerows(results)
-
-    # Calculate statistics
-    total = len(results)
-    correct = sum(1 for r in results if r["is_correct"])
-    percentage = (correct / total) * 100 if total > 0 else 0
-
-    logger.info(f"\nProcessed {total} examples")
-    logger.info(f"Correctly resolved: {correct} ({percentage:.2f}%)")
-
-    # Breakdown by match type
-    match_types = {}
-    for r in results:
-        match_type = r["match_type"]
-        match_types[match_type] = match_types.get(match_type, 0) + 1
-
-    for match_type, count in match_types.items():
-        logger.info(f"{match_type}: {count} ({(count / total) * 100:.2f}%)")
-
-    return results
+    # Create and save the final dataset.
+    final_sft_dataset = Dataset.from_list(results)
+    final_sft_dataset.save_to_disk(save_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Generate SFT dataset using DeepSeek R1 API"
+        description="Generate SFT dataset with exact matches only."
     )
     parser.add_argument(
         "--dataset",
@@ -164,7 +114,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--limit",
         type=int,
-        default=-1,
+        default=None,
         help="Limit the number of examples to process",
     )
     parser.add_argument(
@@ -178,8 +128,20 @@ if __name__ == "__main__":
         type=str,
         choices=["train", "test"],
         default="train",
-        help="Dataset split to process (train or test)",
+        help="Dataset split to process",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="my_sft_dataset",
+        help="Directory to save the final SFT dataset",
     )
     args = parser.parse_args()
 
-    process_dataset(args.dataset, args.limit, args.parallel_requests, args.split)
+    process_dataset(
+        dataset_path=Path(args.dataset),
+        limit=args.limit,
+        parallel_requests=args.parallel_requests,
+        split=args.split,
+        save_dir=args.output_dir,
+    )

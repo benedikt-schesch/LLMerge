@@ -10,11 +10,11 @@ from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
 from src.variables import (
-    MODEL,
-    MAX_SEQ_LENGTH,
+    MODEL_NAME,
+    MAX_SEQUENCE_LENGTH,
     LORA_RANK,
+    MAX_OUTPUT_LENGTH,
     MAX_PROMPT_LENGTH,
-    SYSTEM_PROMPT,
 )
 from src.utils import extract_code_block, normalize_java_code
 
@@ -153,8 +153,8 @@ if __name__ == "__main__":
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=MODEL,
-        max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
+        model_name=MODEL_NAME,
+        max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
@@ -195,7 +195,7 @@ if __name__ == "__main__":
         gradient_accumulation_steps=4,  # Increase to 4 for smoother training
         num_generations=8,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
-        max_completion_length=MAX_SEQ_LENGTH,
+        max_completion_length=MAX_OUTPUT_LENGTH,
         temperature=0.8,
         # num_train_epochs = 1, # Set to 1 for a full training run
         max_steps=500,

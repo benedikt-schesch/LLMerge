@@ -18,13 +18,11 @@ from transformers import TextStreamer
 import torch
 from datasets import load_from_disk
 from train import (
-    MAX_SEQ_LENGTH,
-    MAX_PROMPT_LENGTH,
-    SYSTEM_PROMPT,
     merged_conflict_reward,
     format_reward,
     java_markdown_reward,
 )
+from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH
 from src.utils import cached_query_deepseek_api
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
@@ -55,7 +53,7 @@ def model_inference(example, model, tokenizer, text_streamer):
     output_tokens = model.generate(
         input_ids=inputs,
         streamer=text_streamer,
-        max_new_tokens=MAX_SEQ_LENGTH,
+        max_new_tokens=MAX_OUTPUT_LENGTH,
         use_cache=True,
     )
     # Get the full completion before truncation.
@@ -71,7 +69,7 @@ def get_model(model_name, load_in_4bit: bool = True):
     if "unsloth" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
-            max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
+            max_seq_length=MAX_SEQUENCE_LENGTH,
             load_in_4bit=load_in_4bit,
         )
         unsloth.FastLanguageModel.for_inference(model)
