@@ -57,18 +57,18 @@ def process_example(example: Dict[str, str]) -> Optional[Dict[str, str]]:
     match_type = evaluate_resolution(resolution_text, answer)
 
     if match_type == "exact_match":
-        resolution_full_text = f"<think>{reasoning_text}</think>\n{resolution_text}\n\n"
+        resolution_full_text = (
+            f"<think>\n{reasoning_text}</think>\n{resolution_text}\n\n"
+        )
         conversation = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
             {"role": "assistant", "content": resolution_full_text},
         ]
-        text = (
-            tokenizer.apply_chat_template(
-                conversation, tokenize=False, add_generation_prompt=False
-            )
-            + tokenizer.eos_token
+        text = tokenizer.apply_chat_template(
+            conversation, tokenize=False, add_generation_prompt=False
         )
+        assert text.endswith(tokenizer.eos_token)
         return {"text": text}
     return None
 
@@ -110,7 +110,7 @@ def process_dataset(
     # Create and save the final dataset.
     final_sft_dataset = Dataset.from_list(results)
 
-    save_dir = dataset_path.parent / f"{dataset_path.name}_sft_dataset"
+    save_dir = dataset_path.parent / f"{dataset_path.name}_sft"
     final_sft_dataset.save_to_disk(save_dir)
     logger.success(f"Number of examples: {len(final_sft_dataset)}")
     logger.success(f"Saved the final SFT dataset to {save_dir}")

@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="merges/repos_reaper_1000/dataset_sft_dataset",
+        default="merges/repos_reaper_1000/dataset_sft",
         help="Path to the SFT dataset",
     )
     parser.add_argument(
