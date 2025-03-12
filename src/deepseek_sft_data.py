@@ -68,7 +68,7 @@ def process_dataset(
     limit: Optional[int] = None,
     parallel_requests: int = 16,
     split: str = "test",
-    save_dir: str = "my_sft_dataset",
+    save_dir: str = "deepseek_sft_dataset",
 ) -> None:
     """
     Process the dataset, filter examples with exact match resolutions, build the final SFT dataset,
