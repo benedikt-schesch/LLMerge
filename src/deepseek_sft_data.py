@@ -8,6 +8,7 @@ from typing import Dict, Optional, List
 from tqdm import tqdm
 from datasets import load_from_disk, Dataset
 from transformers import AutoTokenizer
+from loguru import logger
 from utils import extract_code_block, normalize_java_code, cached_query_deepseek_api
 from variables import MAX_SEQUENCE_LENGTH, MODEL_NAME, SYSTEM_PROMPT
 
@@ -68,7 +69,6 @@ def process_dataset(
     limit: Optional[int] = None,
     parallel_requests: int = 16,
     split: str = "test",
-    save_dir: str = "deepseek_sft_dataset",
 ) -> None:
     """
     Process the dataset, filter examples with exact match resolutions, build the final SFT dataset,
@@ -95,10 +95,16 @@ def process_dataset(
                 tokens = tokenizer(text, truncation=False, add_special_tokens=False)
                 if len(tokens["input_ids"]) <= MAX_SEQUENCE_LENGTH:
                     results.append(res)
+                else:
+                    logger.info("Skipping example due to exceeding max sequence length")
 
     # Create and save the final dataset.
     final_sft_dataset = Dataset.from_list(results)
+
+    save_dir = dataset_path.parent / f"{dataset_path.name}_sft_dataset"
     final_sft_dataset.save_to_disk(save_dir)
+    logger.success(f"Number of examples: {len(final_sft_dataset)}")
+    logger.success(f"Saved the final SFT dataset to {save_dir}")
 
 
 if __name__ == "__main__":
@@ -130,12 +136,6 @@ if __name__ == "__main__":
         default="train",
         help="Dataset split to process",
     )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="my_sft_dataset",
-        help="Directory to save the final SFT dataset",
-    )
     args = parser.parse_args()
 
     process_dataset(
@@ -143,5 +143,4 @@ if __name__ == "__main__":
         limit=args.limit,
         parallel_requests=args.parallel_requests,
         split=args.split,
-        save_dir=args.output_dir,
     )

@@ -88,7 +88,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     """Main function for evaluation script."""
     parser = argparse.ArgumentParser(description="Evaluation script for merge outputs.")
     parser.add_argument(
-        "--model_name", type=str, default="api/deepseek-r1", help="Model name to load"
+        "--model_name", type=str, default="outputs/sft_model", help="Model name to load"
     )
     parser.add_argument(
         "--dataset_path",

@@ -34,18 +34,13 @@ def train_sft(
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)
 
-    print(f"Train set size: {len(dataset['train'])}")
-    print(f"Validation set size: {len(dataset['validation'])}")
-
     # Initialize model
     print(f"Loading model {MODEL_NAME}...")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL_NAME,
         max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,
-        fast_inference=True,
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.85,
     )
 
     # Set up LoRA
@@ -82,7 +77,7 @@ def train_sft(
             lr_scheduler_type="linear",
             seed=3407,
             output_dir="outputs",
-            report_to="none",  # Use this for WandB etc
+            report_to="wandb",
         ),
     )
 
@@ -116,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="outputs/sft_dataset/correct_only",
+        default="merges/repos_reaper_1000/dataset_sft_dataset",
         help="Path to the SFT dataset",
     )
     parser.add_argument(
@@ -124,18 +119,6 @@ if __name__ == "__main__":
         type=str,
         default="outputs/sft_model",
         help="Directory to save the trained model",
-    )
-    parser.add_argument(
-        "--epochs", type=int, default=3, help="Number of training epochs"
-    )
-    parser.add_argument(
-        "--batch_size", type=int, default=1, help="Batch size for training"
-    )
-    parser.add_argument(
-        "--gradient_accumulation_steps",
-        type=int,
-        default=4,
-        help="Number of gradient accumulation steps",
     )
     args = parser.parse_args()
 
