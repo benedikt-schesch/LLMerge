@@ -7,13 +7,25 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from tqdm import tqdm
 from datasets import load_from_disk, Dataset
-from transformers import AutoTokenizer
+from unsloth import FastLanguageModel
 from loguru import logger
 from utils import extract_code_block, normalize_java_code, cached_query_deepseek_api
 from variables import MAX_SEQUENCE_LENGTH, MODEL_NAME, SYSTEM_PROMPT
 
 # Initialize tokenizer
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+tokenizer = FastLanguageModel.from_pretrained(MODEL_NAME)[1]
+
+# We need to remove this otherwise the chat template deletes the entire thinking part
+TEMPLATE = (
+    "{% if '</think>' in content %}{% set content = "
+    "content.split('</think>')[-1] %}{% endif %}"
+)
+if TEMPLATE in tokenizer.chat_template:
+    tokenizer.chat_template = tokenizer.chat_template.replace(
+        TEMPLATE,
+        "",
+    )
+    logger.warning("Modified the template to avoid deleting the entire thinking part")
 
 
 def evaluate_resolution(resolution: str, expected_answer: str) -> str:
@@ -43,24 +55,21 @@ def process_example(example: Dict[str, str]) -> Optional[Dict[str, str]]:
     reasoning_text: str = response["reasoning"]
     answer: str = example["answer"]
     match_type = evaluate_resolution(resolution_text, answer)
+
     if match_type == "exact_match":
-        resolution_full_text = (
-            f"<think>\n{reasoning_text}</think>\n{resolution_text}\n\n"
-        )
-        conversations = [
-            [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": resolution_full_text},
-            ]
+        resolution_full_text = f"<think>{reasoning_text}</think>\n{resolution_text}\n\n"
+        conversation = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": resolution_full_text},
         ]
-        text = [
+        text = (
             tokenizer.apply_chat_template(
-                convo, tokenize=False, add_generation_prompt=False
+                conversation, tokenize=False, add_generation_prompt=False
             )
-            for convo in conversations
-        ]
-        return {"text": text[0]}
+            + tokenizer.eos_token
+        )
+        return {"text": text}
     return None
 
 
