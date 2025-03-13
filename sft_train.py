@@ -106,11 +106,6 @@ def train_sft(
         save_method="merged_16bit",
     )
     model.save_pretrained_merged(
-        output_dir / "final_model_4bit",
-        tokenizer,
-        save_method="merged_4bit",
-    )
-    model.save_pretrained_merged(
         output_dir / "final_model_lora",
         tokenizer,
         save_method="lora",
