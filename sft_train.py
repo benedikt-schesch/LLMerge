@@ -100,7 +100,21 @@ def train_sft(
     print(f"Saving model to {output_dir}...")
     model.save_pretrained(output_dir / "final_model")
     tokenizer.save_pretrained(output_dir / "final_model")
-    model.save_lora(output_dir / "lora_model")
+    model.save_pretrained_merged(
+        output_dir / "final_model_16bit",
+        tokenizer,
+        save_method="merged_16bit",
+    )
+    model.save_pretrained_merged(
+        output_dir / "final_model_4bit",
+        tokenizer,
+        save_method="merged_4bit",
+    )
+    model.save_pretrained_merged(
+        output_dir / "final_model_lora",
+        tokenizer,
+        save_method="lora",
+    )
     print("Training completed!")
 
 
