@@ -154,7 +154,8 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     count_resolved_semantically = 0
 
     # Loop over the examples in the dataset.
-    for idx, example in enumerate(tqdm(dataset)):
+    pbar = tqdm(dataset)
+    for idx, example in enumerate(pbar):
         total += 1
 
         output_file_path = output_dir / f"example_{idx}.txt"
@@ -199,17 +200,25 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         if reward == 0.1:
             count_conflict_preserved += 1
 
-        # If the model resolves the conflict perfectly
+        # If the model resolves the conflict semantically
         if reward >= 0.5:
             logger.info(f"Semantically resolved {idx}.")
             count_resolved_semantically += 1
 
-        # If the model resolves the conflict semantically
+        # If the model resolves the conflict perfectly
         if reward == 1.0:
             logger.info(f"Resolved {idx}.")
             count_resolved_perfectly += 1
 
-    # Compute percentages.
+        # Update progress bar with current percentages.
+        pbar.set_postfix(
+            {
+                "Correct": f"{100 * count_resolved_perfectly / total:.2f}%",
+                "Semantic Correct": f"{100 * count_resolved_semantically / total:.2f}%",
+            }
+        )
+
+    # Compute final percentages.
     pct_thinking = 100 * count_thinking / total if total > 0 else 0
     pct_java_md = 100 * count_java_md / total if total > 0 else 0
     pct_conflict = 100 * count_conflict_preserved / total if total > 0 else 0
