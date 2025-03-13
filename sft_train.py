@@ -97,8 +97,9 @@ def train_sft(
 
     # Save model
     print(f"Saving model to {output_dir}...")
-    trainer.save_model(output_dir)
-
+    model.save_pretrained(output_dir / "final_model")
+    tokenizer.save_pretrained(output_dir / "final_model")
+    model.save_lora(output_dir / "lora_model")
     print("Training completed!")
 
 
@@ -115,7 +116,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="outputs/sft_model",
+        default="outputs/sft_lora_model",
         help="Directory to save the trained model",
     )
     args = parser.parse_args()
