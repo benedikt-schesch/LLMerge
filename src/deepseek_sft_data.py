@@ -58,7 +58,7 @@ def process_example(example: Dict[str, str]) -> Optional[Dict[str, str]]:
 
     if match_type == "exact_match":
         resolution_full_text = (
-            f"<think>\n{reasoning_text}</think>\n{resolution_text}\n\n"
+            f"<think>\n{reasoning_text}\n</think>\n\n{resolution_text}\n\n"
         )
         conversation = [
             {"role": "system", "content": SYSTEM_PROMPT},
