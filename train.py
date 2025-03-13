@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
-    MODEL_NAME = "outputs/sft_model/final_model"
+    MODEL_NAME = "outputs/sft_model/final_model_lora"
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL_NAME,
         max_seq_length=MAX_SEQUENCE_LENGTH,
