@@ -151,14 +151,14 @@ if __name__ == "__main__":
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
-    MODEL_NAME = "outputs/sft_model/final_model_lora"
+    MODEL_NAME = "outputs/sft_model/final_model_16bit"
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL_NAME,
         max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.5,  # Reduce if out of memory
+        gpu_memory_utilization=0.8,  # Reduce if out of memory
     )
 
     if "sft" not in MODEL_NAME:
