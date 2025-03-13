@@ -105,11 +105,6 @@ def train_sft(
         tokenizer,
         save_method="merged_16bit",
     )
-    model.save_pretrained_merged(
-        output_dir / "final_model_lora",
-        tokenizer,
-        save_method="lora",
-    )
     print("Training completed!")
 
 
