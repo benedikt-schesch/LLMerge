@@ -151,8 +151,9 @@ if __name__ == "__main__":
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
+    MODEL_NAME = "outputs/sft_model/final_model"
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="outputs/sft_model/final_model",
+        model_name=MODEL_NAME,
         max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
@@ -160,22 +161,23 @@ if __name__ == "__main__":
         gpu_memory_utilization=0.5,  # Reduce if out of memory
     )
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],  # Remove QKVO if out of memory
-        lora_alpha=LORA_RANK,
-        use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
-        random_state=3407,
-    )
+    if "sft" not in MODEL_NAME:
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ],  # Remove QKVO if out of memory
+            lora_alpha=LORA_RANK,
+            use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
+            random_state=3407,
+        )
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
