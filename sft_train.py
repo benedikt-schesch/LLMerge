@@ -10,6 +10,7 @@ This script:
 
 import os
 import argparse
+from pathlib import Path
 from datasets import load_from_disk
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from transformers import TrainingArguments
@@ -26,8 +27,8 @@ os.environ["WANDB_PROJECT"] = "LLMerge-SFT"
 
 
 def train_sft(
-    dataset_path,
-    output_dir="outputs/sft_model",
+    dataset_path: Path,
+    output_dir: Path = Path("outputs/sft_model"),
 ):
     """Train a model using Supervised Fine-Tuning."""
     # Load dataset
@@ -116,12 +117,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="outputs/sft_lora_model",
+        default="outputs/sft_model",
         help="Directory to save the trained model",
     )
     args = parser.parse_args()
 
     train_sft(
         dataset_path=args.dataset,
-        output_dir=args.output_dir,
+        output_dir=Path(args.output_dir),
     )
