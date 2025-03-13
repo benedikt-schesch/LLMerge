@@ -158,26 +158,25 @@ if __name__ == "__main__":
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.7,  # Reduce if out of memory
+        gpu_memory_utilization=0.6,  # Reduce if out of memory
     )
 
-    if "sft" not in MODEL_NAME:
-        model = FastLanguageModel.get_peft_model(
-            model,
-            r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-            target_modules=[
-                "q_proj",
-                "k_proj",
-                "v_proj",
-                "o_proj",
-                "gate_proj",
-                "up_proj",
-                "down_proj",
-            ],  # Remove QKVO if out of memory
-            lora_alpha=LORA_RANK,
-            use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
-            random_state=3407,
-        )
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],  # Remove QKVO if out of memory
+        lora_alpha=LORA_RANK,
+        use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
+        random_state=3407,
+    )
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
