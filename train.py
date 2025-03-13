@@ -152,7 +152,7 @@ if __name__ == "__main__":
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="outputs/sft_model",
+        model_name="outputs/sft_model/final_model",
         max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
