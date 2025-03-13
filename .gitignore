@@ -5,6 +5,8 @@
 repos/
 gil_free_env/
 eval_outputs/
+deepseek_cache/
+deepseek_sft/
 **.lock
 .workdir/
 **/file_conflicts

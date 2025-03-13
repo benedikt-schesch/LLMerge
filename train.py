@@ -5,7 +5,7 @@
 import os
 import re
 import math
-from typing import Optional, List, Dict
+from typing import List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
@@ -16,6 +16,8 @@ from src.variables import (
     MAX_PROMPT_LENGTH,
     SYSTEM_PROMPT,
 )
+from src.utils import extract_code_block, normalize_java_code
+
 
 os.environ["WANDB_PROJECT"] = "LLMerge"
 
@@ -48,7 +50,6 @@ CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
 # ------------------------------------------
 # 1) Pre-compile your regex patterns
 # ------------------------------------------
-JAVA_MARKDOWN_RE = re.compile(r"```java\n(.*?)\n```", re.DOTALL)
 THINKING_RE = re.compile(r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$", re.DOTALL)
 
 # For normalizing Java code
@@ -62,24 +63,6 @@ CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
 JAVA_MARKDOWN_RE = re.compile(r"```java\n(.*?)\n```", re.DOTALL)
 THINKING_RE = re.compile(r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$", re.DOTALL)
 
-# For normalizing Java code
-BLOCK_COMMENT_RE = re.compile(r"/\*[\s\S]*?\*/")
-LINE_COMMENT_RE = re.compile(r"//.*")
-WHITESPACE_RE = re.compile(r"\s+")
-
-CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
-
-
-def normalize_java_code(code: str) -> str:
-    """
-    Normalizes Java code by removing block comments, line comments,
-    and extra whitespace (so we focus on core semantics).
-    """
-    code = BLOCK_COMMENT_RE.sub("", code)
-    code = LINE_COMMENT_RE.sub("", code)
-    code = WHITESPACE_RE.sub(" ", code)
-    return code.strip()
-
 
 def extract_answer(text: str) -> str:
     """
@@ -88,18 +71,6 @@ def extract_answer(text: str) -> str:
     """
     parts = text.split("</think>", 1)
     return parts[-1] if len(parts) > 1 else parts[0]
-
-
-def extract_code_block(text: str) -> Optional[str]:
-    """
-    Extracts the code block from a markdown-formatted text:
-       ```java
-       ... some code ...
-       ```
-    Returns None if there's no Java code block.
-    """
-    match = JAVA_MARKDOWN_RE.search(text)
-    return match.group(1).strip() if match else None
 
 
 def has_conflict_markers(text: str) -> bool:
@@ -162,10 +133,10 @@ def merged_conflict_reward(
             0.0
             if (cb := extract_code_block(extract_answer(c[0]["content"]))) is None
             else 1.0
-            if cb == answer[idx]  # exact match
+            if cb == answer[idx].strip()  # exact match
             else 0.5
             if normalize_java_code(cb)
-            == normalize_java_code(answer[idx])  # semantic match
+            == normalize_java_code(answer[idx].strip())  # semantic match
             else 0.1
             if cb == goal_code_block  # same as prompt => conflict
             else 0.0
@@ -225,7 +196,7 @@ if __name__ == "__main__":
         num_generations=6,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_SEQ_LENGTH,
-        temperature=0.9,
+        temperature=0.8,
         # num_train_epochs = 1, # Set to 1 for a full training run
         max_steps=500,
         save_steps=100,
@@ -246,3 +217,4 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train()
+    model.save_lora("grpo_saved_lora")

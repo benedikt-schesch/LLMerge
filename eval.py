@@ -9,6 +9,7 @@ Loads the same dataset as in training and computes:
   - % that are correctly resolved
 """
 
+import argparse
 from pathlib import Path
 from tqdm import tqdm
 from loguru import logger
@@ -24,6 +25,7 @@ from train import (
     format_reward,
     java_markdown_reward,
 )
+from src.utils import cached_query_deepseek_api
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
 logger.add("eval.log", backtrace=True, diagnose=True)
@@ -31,6 +33,16 @@ logger.add("eval.log", backtrace=True, diagnose=True)
 
 def model_inference(example, model, tokenizer, text_streamer):
     """Perform model inference."""
+    if model == "api/deepseek-r1":
+        # Bypass local model and call deepseek_sft_data's query_deepseek_api
+        response = cached_query_deepseek_api(example["question"])
+        if response is None:
+            return ""
+        reasoning = response["reasoning"]
+        result = response["result"]
+        # Combine them into a single string that the rest of the eval script expects
+        full_completion = f"<think>\n{reasoning}</think>\n{result}"
+        return full_completion
     # Generate a completion for the given prompt.
     inputs = tokenizer.apply_chat_template(
         example["prompt"],  # type: ignore
@@ -54,6 +66,8 @@ def model_inference(example, model, tokenizer, text_streamer):
 def get_model(model_name, load_in_4bit: bool = True):
     """Load the model and tokenizer."""
     # Load the model and tokenizer (using same parameters as in training)
+    if model_name == "api/deepseek-r1":
+        return "api/deepseek-r1", None, None
     if "unsloth" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
@@ -74,17 +88,53 @@ def get_model(model_name, load_in_4bit: bool = True):
 
 def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-branches
     """Main function for evaluation script."""
+    parser = argparse.ArgumentParser(description="Evaluation script for merge outputs.")
+    parser.add_argument(
+        "--model_name", type=str, default="api/deepseek-r1", help="Model name to load"
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        default="merges/repos_reaper_test/dataset",
+        help="Path to the dataset on disk",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="eval_outputs",
+        help="Directory to store evaluation outputs",
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        choices=["train", "test"],
+        help="Dataset split to evaluate",
+    )
+    parser.add_argument(
+        "--load_in_4bit",
+        type=lambda x: str(x).lower() == "true",
+        default=True,
+        help="Load model in 4bit mode",
+    )
+    args = parser.parse_args()
+
     # Load the dataset (using the same training data)
-    dataset = load_from_disk("merges/repos_50/dataset")["train"]
+    dataset = load_from_disk(args.dataset_path)[args.split]
 
     logger.info("Starting evaluation...")
     logger.info(f"Loaded {len(dataset)} examples.")
 
-    model_name = "unsloth/QwQ-32B"
-    load_in_4bit = True
+    model_name = args.model_name
+    load_in_4bit = args.load_in_4bit
 
     torch.set_grad_enabled(False)
-    output_dir = Path("eval_outputs")
+    output_dir = Path(args.output_dir)
+
+    # Extract dataset name from dataset_path, assuming format 'merges/{dataset_name}/dataset'
+    parts = args.dataset_path.split("/")
+    dataset_name = parts[1] if len(parts) > 2 else "default"
+    output_dir = output_dir / dataset_name / args.split
 
     if load_in_4bit:
         output_dir = output_dir / f"{model_name}-loaded-4bit"
@@ -111,9 +161,11 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
 
         output_file_path = output_dir / f"example_{idx}.txt"
         if output_file_path.exists():
+            logger.info(f"Loading example {idx} from file...")
             with open(output_file_path, "r", encoding="utf-8") as f:
                 full_completion = f.read()
         else:
+            logger.info(f"Processing example {idx}...")
             # Load the model lazily if not already loaded.
             if model is None:
                 model, tokenizer, text_streamer = get_model(model_name, load_in_4bit)
@@ -121,11 +173,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
             # Write the full completion to file.
             with open(output_file_path, "w", encoding="utf-8") as output_file:
                 output_file.write(full_completion)
-
         if "<｜Assistant｜>" in full_completion:
             completion = full_completion.split("<｜Assistant｜>", 1)[1]
         elif "<|im_start|>assistant" in full_completion:
             completion = full_completion.split("<|im_start|>assistant", 1)[1]
+        elif model_name == "api/deepseek-r1":
+            completion = full_completion
         else:
             raise ValueError("Could not find completion in full output.")
 
@@ -151,12 +204,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         # If the model resolves the conflict perfectly
         if reward >= 0.5:
             logger.info(f"Semantically resolved {idx}.")
-            count_resolved_perfectly += 1
+            count_resolved_semantically += 1
 
         # If the model resolves the conflict semantically
         if reward == 1.0:
             logger.info(f"Resolved {idx}.")
-            count_resolved_semantically += 1
+            count_resolved_perfectly += 1
 
     # Compute percentages.
     pct_thinking = 100 * count_thinking / total if total > 0 else 0
@@ -172,10 +225,10 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     logger.success(f"Percentage with valid thinking format: {pct_thinking:.2f}%")
     logger.success(f"Percentage with valid Java markdown format: {pct_java_md:.2f}%")
     logger.success(f"Percentage correctly raising merge conflict: {pct_conflict:.2f}%")
-    logger.success(f"Percentage correctly resolved merges: {pct_resolved:.2f}%")
     logger.success(
         f"Percentage semantically correctly resolved merges: {pct_resolved_semantic:.2f}%"
     )
+    logger.success(f"Percentage correctly resolved merges: {pct_resolved:.2f}%")
 
 
 if __name__ == "__main__":
