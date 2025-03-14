@@ -151,6 +151,7 @@ def merged_conflict_reward(
     ]
     wandb.log({"merged_conflict_reward": rewards})
     print("Merged Conflict Reward:", rewards)
+    print("Output lengths:", [len(c[0]["content"]) for c in completions])
     return rewards
 
 
