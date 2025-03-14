@@ -93,6 +93,7 @@ def format_reward(
     """
     rewards = [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
     wandb.log({"format_reward": rewards})
+    print("Format Reward:", rewards)
     return rewards
 
 
@@ -110,6 +111,7 @@ def java_markdown_reward(
         for c in completions
     ]
     wandb.log({"java_markdown_reward": rewards})
+    print("Java Markdown Reward:", rewards)
     return rewards
 
 
@@ -130,7 +132,7 @@ def merged_conflict_reward(
     goal_code_block = extract_code_block(prompts[0][-1]["content"])
 
     # Print the responses for debugging
-    print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
+    # print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
 
     rewards = [
         (
@@ -148,6 +150,7 @@ def merged_conflict_reward(
         for idx, c in enumerate(completions)
     ]
     wandb.log({"merged_conflict_reward": rewards})
+    print("Merged Conflict Reward:", rewards)
     return rewards
 
 
