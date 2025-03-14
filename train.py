@@ -9,6 +9,7 @@ from typing import List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
+import wandb
 from src.variables import (
     MAX_SEQUENCE_LENGTH,
     LORA_RANK,
@@ -90,22 +91,26 @@ def format_reward(
     Reward = 0.5 if the completion matches the 'thinking' pattern.
     Otherwise 0.0.
     """
-    return [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
+    rewards = [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
+    wandb.log({"format_reward": rewards})
+    return rewards
 
 
-def java_markdown_reward(
-    completions: List[List[Dict[str, str]]],
-    **kwargs,
-) -> List[float]:
-    """
-    Reward = 1.0 if the *answer block* (after </think>)
-    contains a Java code block (```java ... ```).
-    Otherwise 0.0.
-    """
-    return [
-        1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
-        for c in completions
-    ]
+# def java_markdown_reward(
+#     completions: List[List[Dict[str, str]]],
+#     **kwargs,
+# ) -> List[float]:
+#     """
+#     Reward = 1.0 if the *answer block* (after </think>)
+#     contains a Java code block (```java ... ```).
+#     Otherwise 0.0.
+#     """
+#     rewards = [
+#         1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
+#         for c in completions
+#     ]
+#     wandb.log({"java_markdown_reward": rewards})
+#     return rewards
 
 
 def merged_conflict_reward(
@@ -127,7 +132,7 @@ def merged_conflict_reward(
     # Print the responses for debugging
     print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
 
-    return [
+    rewards = [
         (
             0.0
             if (cb := extract_code_block(extract_answer(c[0]["content"]))) is None
@@ -142,6 +147,8 @@ def merged_conflict_reward(
         )
         for idx, c in enumerate(completions)
     ]
+    wandb.log({"merged_conflict_reward": rewards})
+    return rewards
 
 
 if __name__ == "__main__":
@@ -210,7 +217,6 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         reward_funcs=[  # type: ignore
             format_reward,
-            java_markdown_reward,
             merged_conflict_reward,
         ],
         args=training_args,
