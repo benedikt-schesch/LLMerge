@@ -96,21 +96,21 @@ def format_reward(
     return rewards
 
 
-# def java_markdown_reward(
-#     completions: List[List[Dict[str, str]]],
-#     **kwargs,
-# ) -> List[float]:
-#     """
-#     Reward = 1.0 if the *answer block* (after </think>)
-#     contains a Java code block (```java ... ```).
-#     Otherwise 0.0.
-#     """
-#     rewards = [
-#         1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
-#         for c in completions
-#     ]
-#     wandb.log({"java_markdown_reward": rewards})
-#     return rewards
+def java_markdown_reward(
+    completions: List[List[Dict[str, str]]],
+    **kwargs,
+) -> List[float]:
+    """
+    Reward = 1.0 if the *answer block* (after </think>)
+    contains a Java code block (```java ... ```).
+    Otherwise 0.0.
+    """
+    rewards = [
+        1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
+        for c in completions
+    ]
+    wandb.log({"java_markdown_reward": rewards})
+    return rewards
 
 
 def merged_conflict_reward(
