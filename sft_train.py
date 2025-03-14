@@ -10,17 +10,16 @@ This script:
 
 import os
 import argparse
+from pathlib import Path
 from datasets import load_from_disk
 from unsloth import FastLanguageModel, is_bfloat16_supported
 from transformers import TrainingArguments
 from trl import SFTTrainer
 
 from src.variables import (
-    MODEL,
-    MAX_SEQ_LENGTH,
+    MODEL_NAME,
+    MAX_SEQUENCE_LENGTH,
     LORA_RANK,
-    MAX_PROMPT_LENGTH,
-    SYSTEM_PROMPT,
 )
 
 # Set WANDB project
@@ -28,29 +27,21 @@ os.environ["WANDB_PROJECT"] = "LLMerge-SFT"
 
 
 def train_sft(
-    dataset_path,
-    output_dir="outputs/sft_model",
-    epochs=1,
-    batch_size=1,
-    gradient_accumulation_steps=4,
+    dataset_path: Path,
+    output_dir: Path = Path("outputs/sft_model"),
 ):
     """Train a model using Supervised Fine-Tuning."""
     # Load dataset
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)
 
-    print(f"Train set size: {len(dataset['train'])}")
-    print(f"Validation set size: {len(dataset['validation'])}")
-
     # Initialize model
-    print(f"Loading model {MODEL}...")
+    print(f"Loading model {MODEL_NAME}...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=MODEL,
-        max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
+        model_name=MODEL_NAME,
+        max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,
-        fast_inference=False,  # Disable during training
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.85,
     )
 
     # Set up LoRA
@@ -73,32 +64,32 @@ def train_sft(
 
     # Training arguments
     training_args = TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=epochs,
-        per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=gradient_accumulation_steps,
-        learning_rate=5e-6,
-        weight_decay=0.01,
-        warmup_ratio=0.03,
-        lr_scheduler_type="cosine",
-        optim="adamw_8bit",
-        logging_steps=1,
-        bf16=is_bfloat16_supported(),
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        warmup_steps=5,
+        num_train_epochs=2,
+        learning_rate=1e-4,
         fp16=not is_bfloat16_supported(),
-        save_strategy="epoch",
-        evaluation_strategy="epoch",
+        bf16=is_bfloat16_supported(),
+        logging_steps=1,
+        optim="adamw_8bit",
+        weight_decay=0.01,
+        lr_scheduler_type="linear",
+        seed=3407,
+        output_dir="outputs",
         report_to="wandb",
     )
 
     # Initialize SFT Trainer
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
         args=training_args,
-        train_dataset=dataset["train"],
-        eval_dataset=dataset["validation"],
-        dataset_text_field="completion",
-        packing=False,
+        tokenizer=tokenizer,
+        train_dataset=dataset,
+        dataset_text_field="text",
+        max_seq_length=MAX_SEQUENCE_LENGTH,
+        dataset_num_proc=2,
+        packing=False,  # Can make training 5x faster for short sequences.
     )
 
     # Start training
@@ -107,8 +98,13 @@ def train_sft(
 
     # Save model
     print(f"Saving model to {output_dir}...")
-    trainer.save_model(output_dir)
-
+    model.save_pretrained(output_dir / "final_model")
+    tokenizer.save_pretrained(output_dir / "final_model")
+    model.save_pretrained_merged(
+        output_dir / "final_model_16bit",
+        tokenizer,
+        save_method="merged_16bit",
+    )
     print("Training completed!")
 
 
@@ -119,7 +115,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="outputs/sft_dataset/correct_only",
+        default="merges/repos_reaper_1000/dataset_sft",
         help="Path to the SFT dataset",
     )
     parser.add_argument(
@@ -128,24 +124,9 @@ if __name__ == "__main__":
         default="outputs/sft_model",
         help="Directory to save the trained model",
     )
-    parser.add_argument(
-        "--epochs", type=int, default=3, help="Number of training epochs"
-    )
-    parser.add_argument(
-        "--batch_size", type=int, default=1, help="Batch size for training"
-    )
-    parser.add_argument(
-        "--gradient_accumulation_steps",
-        type=int,
-        default=4,
-        help="Number of gradient accumulation steps",
-    )
     args = parser.parse_args()
 
     train_sft(
         dataset_path=args.dataset,
-        output_dir=args.output_dir,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        output_dir=Path(args.output_dir),
     )

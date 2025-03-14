@@ -9,12 +9,12 @@ from typing import List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
+import wandb
 from src.variables import (
-    MODEL,
-    MAX_SEQ_LENGTH,
+    MAX_SEQUENCE_LENGTH,
     LORA_RANK,
+    MAX_OUTPUT_LENGTH,
     MAX_PROMPT_LENGTH,
-    SYSTEM_PROMPT,
 )
 from src.utils import extract_code_block, normalize_java_code
 
@@ -91,7 +91,10 @@ def format_reward(
     Reward = 0.5 if the completion matches the 'thinking' pattern.
     Otherwise 0.0.
     """
-    return [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
+    rewards = [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
+    wandb.log({"format_reward": rewards})
+    print("Format Reward:", rewards)
+    return rewards
 
 
 def java_markdown_reward(
@@ -103,10 +106,13 @@ def java_markdown_reward(
     contains a Java code block (```java ... ```).
     Otherwise 0.0.
     """
-    return [
+    rewards = [
         1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
         for c in completions
     ]
+    wandb.log({"java_markdown_reward": rewards})
+    print("Java Markdown Reward:", rewards)
+    return rewards
 
 
 def merged_conflict_reward(
@@ -126,9 +132,9 @@ def merged_conflict_reward(
     goal_code_block = extract_code_block(prompts[0][-1]["content"])
 
     # Print the responses for debugging
-    print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
+    # print("-" * 20, f"\nResponse:\n{completions[0][0]['content']}")
 
-    return [
+    rewards = [
         (
             0.0
             if (cb := extract_code_block(extract_answer(c[0]["content"]))) is None
@@ -143,6 +149,10 @@ def merged_conflict_reward(
         )
         for idx, c in enumerate(completions)
     ]
+    wandb.log({"merged_conflict_reward": rewards})
+    print("Merged Conflict Reward:", rewards)
+    print("Output lengths:", [len(c[0]["content"]) for c in completions])
+    return rewards
 
 
 if __name__ == "__main__":
@@ -152,13 +162,14 @@ if __name__ == "__main__":
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
+    MODEL_NAME = "outputs/sft_model/final_model_16bit"
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=MODEL,
-        max_seq_length=MAX_SEQ_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT),
+        model_name=MODEL_NAME,
+        max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.8,  # Reduce if out of memory
+        gpu_memory_utilization=0.65,  # Reduce if out of memory
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -193,9 +204,9 @@ if __name__ == "__main__":
         fp16=not is_bfloat16_supported(),
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,  # Increase to 4 for smoother training
-        num_generations=8,  # Decrease if out of memory
+        num_generations=12,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
-        max_completion_length=MAX_SEQ_LENGTH,
+        max_completion_length=MAX_OUTPUT_LENGTH,
         temperature=0.8,
         # num_train_epochs = 1, # Set to 1 for a full training run
         max_steps=500,
@@ -210,7 +221,6 @@ if __name__ == "__main__":
         processing_class=tokenizer,
         reward_funcs=[  # type: ignore
             format_reward,
-            java_markdown_reward,
             merged_conflict_reward,
         ],
         args=training_args,

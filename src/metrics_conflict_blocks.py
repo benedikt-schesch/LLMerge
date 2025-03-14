@@ -40,7 +40,7 @@ from transformers import AutoTokenizer
 from loguru import logger
 from tqdm import tqdm
 from build_dataset import build_query
-from variables import MODEL, MAX_PROMPT_LENGTH
+from variables import MODEL_NAME, MAX_PROMPT_LENGTH
 
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -202,7 +202,7 @@ def main():  # pylint: disable=too-many-statements, too-many-locals
 
     # Prepare a list for metric rows
     rows = []
-    tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
 
     for conflict_path in tqdm(conflict_files):
         # For each .conflict, find the corresponding .resolved_conflict file
