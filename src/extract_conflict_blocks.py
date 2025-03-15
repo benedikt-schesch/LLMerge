@@ -33,7 +33,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from loguru import logger
-from utils import get_num_workers
+from get_conflict_files import get_num_workers
 
 logger.add("run.log", backtrace=True, diagnose=True)
 
