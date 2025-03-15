@@ -85,6 +85,7 @@ def has_conflict_markers(text: str) -> bool:
 
 def format_reward(
     completions: List[List[Dict[str, str]]],
+    log_wandb: bool = True,
     **kwargs,
 ) -> List[float]:
     """
@@ -92,13 +93,15 @@ def format_reward(
     Otherwise 0.0.
     """
     rewards = [0.5 if THINKING_RE.match(c[0]["content"]) else 0.0 for c in completions]
-    wandb.log({"format_reward": rewards})
+    if log_wandb:
+        wandb.log({"format_reward": rewards})
     print("Format Reward:", rewards)
     return rewards
 
 
 def java_markdown_reward(
     completions: List[List[Dict[str, str]]],
+    log_wandb: bool = True,
     **kwargs,
 ) -> List[float]:
     """
@@ -110,7 +113,8 @@ def java_markdown_reward(
         1.0 if JAVA_MARKDOWN_RE.search(extract_answer(c[0]["content"])) else 0.0
         for c in completions
     ]
-    wandb.log({"java_markdown_reward": rewards})
+    if log_wandb:
+        wandb.log({"java_markdown_reward": rewards})
     print("Java Markdown Reward:", rewards)
     return rewards
 
@@ -119,6 +123,7 @@ def merged_conflict_reward(
     prompts: List[List[Dict[str, str]]],
     completions: List[List[Dict[str, str]]],
     answer: List[str],
+    log_wandb: bool = True,
     **kwargs,
 ) -> List[float]:
     """
@@ -149,7 +154,8 @@ def merged_conflict_reward(
         )
         for idx, c in enumerate(completions)
     ]
-    wandb.log({"merged_conflict_reward": rewards})
+    if log_wandb:
+        wandb.log({"merged_conflict_reward": rewards})
     print("Merged Conflict Reward:", rewards)
     print("Output lengths:", [len(c[0]["content"]) for c in completions])
     return rewards

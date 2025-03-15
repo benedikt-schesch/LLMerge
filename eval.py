@@ -190,14 +190,16 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         answers = [example["answer"]]  # type: ignore
 
         # Evaluate the thinking format.
-        if format_reward(completions)[0] > 0:
+        if format_reward(completions, log_wandb=False)[0] > 0:
             count_thinking += 1
 
         # Evaluate the Java markdown formatting.
-        if java_markdown_reward(completions)[0] > 0:
+        if java_markdown_reward(completions, log_wandb=False)[0] > 0:
             count_java_md += 1
 
-        reward = merged_conflict_reward(prompts, completions, answers)[0]
+        reward = merged_conflict_reward(prompts, completions, answers, log_wandb=False)[
+            0
+        ]
 
         # If the model raises a conflict
         if reward == 0.1:
