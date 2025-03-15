@@ -66,7 +66,7 @@ def get_model(model_name, load_in_4bit: bool = True):
     # Load the model and tokenizer (using same parameters as in training)
     if model_name == "api/deepseek-r1":
         return "api/deepseek-r1", None, None
-    if "unsloth" in model_name:
+    if "unsloth" in model_name or "outputs" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQUENCE_LENGTH,
