@@ -263,12 +263,6 @@ def main():  # pylint: disable=too-many-statements, too-many-locals
         # Decide if this conflict should be selected based on filtering rules
         selected = True
 
-        # If we do NOT keep trivial resolutions, skip merges that are fully in left or right
-        if (not args.keep_trivial_resolution) and metrics[
-            "resolution_in_left_or_right"
-        ]:
-            selected = False
-
         # Skip if the entire conflict file exceeds max_line_count
         if metrics["full_conflict_lines"] > args.max_line_count:
             selected = False

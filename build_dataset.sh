@@ -57,6 +57,13 @@ if [ $RUN_GET_EXTRACT -eq 1 ]; then
     rm -f run.log
     rm -rf .workdir
 
+    if [ -d "$OUT_DIR/conflict_files" ]; then
+        rm -r "$OUT_DIR/conflict_files"
+    fi
+    if [ -d "$OUT_DIR/conflict_blocks" ]; then
+        rm -r "$OUT_DIR/conflict_blocks"
+    fi
+
     echo "Running get_conflict_files.py..."
     python3 src/get_conflict_files.py --repos "$REPOS_DIR" --output_dir "$OUT_DIR"
 
