@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from tqdm import tqdm
 from datasets import load_from_disk, Dataset
-from unsloth import FastLanguageModel
+from transformers import AutoTokenizer
 from loguru import logger
 from utils import extract_code_block, normalize_java_code, cached_query_deepseek_api
 from variables import MAX_SEQUENCE_LENGTH, MODEL_NAME, SYSTEM_PROMPT
 
 # Initialize tokenizer
-tokenizer = FastLanguageModel.from_pretrained(MODEL_NAME)[1]
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
 
 # We need to remove this otherwise the chat template deletes the entire thinking part
 TEMPLATE = (
