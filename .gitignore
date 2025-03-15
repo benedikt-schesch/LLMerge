@@ -15,7 +15,7 @@ deepseek_sft/
 **/conflict_files
 **/filtered_merges
 **/dataset
-outputs/
+outputs*/
 wandb/
 unsloth_compiled_cache/
 debug.txt

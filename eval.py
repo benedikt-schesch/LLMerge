@@ -90,7 +90,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--model_name",
         type=str,
-        default="outputs/checkpoint-500/",
+        default="api/deepseek-r1",
         help="Model name to load",
     )
     parser.add_argument(
