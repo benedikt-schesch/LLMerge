@@ -213,7 +213,7 @@ if __name__ == "__main__":
         num_generations=16,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_OUTPUT_LENGTH,
-        temperature=0.8,
+        temperature=0.7,
         # num_train_epochs = 1, # Set to 1 for a full training run
         max_steps=300,
         save_steps=100,
