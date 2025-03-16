@@ -233,3 +233,4 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train()
+    model.save_lora("grpo_saved_lora")
