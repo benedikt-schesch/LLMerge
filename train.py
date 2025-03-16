@@ -203,7 +203,7 @@ if __name__ == "__main__":
         weight_decay=0,
         warmup_ratio=0,
         warmup_steps=15,
-        lr_scheduler_type="constant_with_warmup",
+        lr_scheduler_type="cosine",
         optim="adamw_8bit",
         logging_steps=1,
         bf16=is_bfloat16_supported(),
