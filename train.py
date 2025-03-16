@@ -202,7 +202,7 @@ if __name__ == "__main__":
         adam_beta2=0.99,
         weight_decay=0,
         warmup_ratio=0,
-        warmup_steps=20,
+        warmup_steps=15,
         lr_scheduler_type="constant_with_warmup",
         optim="adamw_8bit",
         logging_steps=1,
