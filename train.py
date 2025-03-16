@@ -215,7 +215,7 @@ if __name__ == "__main__":
         max_completion_length=MAX_OUTPUT_LENGTH,
         temperature=0.8,
         # num_train_epochs = 1, # Set to 1 for a full training run
-        max_steps=500,
+        max_steps=300,
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
