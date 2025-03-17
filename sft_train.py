@@ -12,9 +12,9 @@ import os
 import argparse
 from pathlib import Path
 from datasets import load_from_disk
-from transformers import AutoModelForCausalLM, TrainingArguments
+from transformers import TrainingArguments
 from trl import SFTTrainer
-import torch
+from peft import LoraConfig
 
 from src.variables import (
     MODEL_NAME,
@@ -35,12 +35,6 @@ def train_sft(
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)
 
-    # Initialize model
-    print(f"Loading model {MODEL_NAME}...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME, torch_dtype=torch.bfloat16, device_map="auto"
-    )
-
     # Training arguments
     training_args = TrainingArguments(
         per_device_train_batch_size=2,
@@ -58,11 +52,21 @@ def train_sft(
         report_to="wandb",
     )
 
+    peft_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        lora_dropout=0.05,
+        target_modules="all-linear",
+        modules_to_save=["lm_head", "embed_token"],
+        task_type="CAUSAL_LM",
+    )
+
     # Initialize SFT Trainer
     trainer = SFTTrainer(
-        model=model,
+        MODEL_NAME,
         args=training_args,
         train_dataset=dataset,
+        peft_config=peft_config,
     )
 
     # Start training
