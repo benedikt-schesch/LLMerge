@@ -197,11 +197,11 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
-        learning_rate=5e-6,
+        learning_rate=5e-5,
         adam_beta1=0.9,
         adam_beta2=0.99,
-        weight_decay=0,
-        warmup_ratio=0,
+        weight_decay=0.1,
+        warmup_ratio=0.1,
         warmup_steps=15,
         lr_scheduler_type="cosine",
         optim="adamw_8bit",
@@ -209,7 +209,7 @@ if __name__ == "__main__":
         bf16=is_bfloat16_supported(),
         fp16=not is_bfloat16_supported(),
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,  # Increase to 4 for smoother training
+        gradient_accumulation_steps=4,  # Increase to 4 for smoother training
         num_generations=16,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_OUTPUT_LENGTH,
