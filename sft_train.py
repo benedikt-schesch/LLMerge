@@ -18,6 +18,7 @@ from peft import LoraConfig
 
 from src.variables import (
     MODEL_NAME,
+    LORA_RANK,
 )
 
 # Set WANDB project
@@ -53,12 +54,17 @@ def train_sft(
     )
 
     peft_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.05,
-        target_modules="all-linear",
-        modules_to_save=["lm_head", "embed_token"],
-        task_type="CAUSAL_LM",
+        r=LORA_RANK,
+        lora_alpha=LORA_RANK,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
     )
 
     # Initialize SFT Trainer
