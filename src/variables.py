@@ -4,7 +4,7 @@
 
 MAX_NUM_MERGES = 100
 
-MODEL_NAME = "deepseek-ai/deepseek-r1-distill-qwen-7B"  # Model to use for generation
+MODEL_NAME = "deepseek-ai/deepseek-r1-distill-qwen-3B"  # Model to use for generation
 MAX_OUTPUT_LENGTH = 2048  # Maximum number of tokens of the entire sequence
 MAX_PROMPT_LENGTH = 256  # Maximum number of tokens in the prompt
 LORA_RANK = 64  # Larger rank = smarter, but slower
