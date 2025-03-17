@@ -204,7 +204,7 @@ if __name__ == "__main__":
         warmup_ratio=0.1,
         warmup_steps=15,
         lr_scheduler_type="cosine",
-        optim="adamw_8bit",
+        optim="paged_adamw_8bit",
         logging_steps=1,
         bf16=is_bfloat16_supported(),
         fp16=not is_bfloat16_supported(),
