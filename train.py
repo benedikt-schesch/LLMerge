@@ -6,12 +6,12 @@ import os
 import re
 import math
 from typing import List, Dict
-from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
 from datasets import load_from_disk
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import get_peft_model, LoraConfig
 import wandb
 from src.variables import (
-    MAX_SEQUENCE_LENGTH,
     LORA_RANK,
     MAX_OUTPUT_LENGTH,
     MAX_PROMPT_LENGTH,
@@ -162,25 +162,17 @@ def merged_conflict_reward(
 
 
 if __name__ == "__main__":
-    PatchFastRL("GRPO", FastLanguageModel)
-
     print("Loading dataset...")
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
     MODEL_NAME = "outputs/sft_model/final_model_16bit"
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=MODEL_NAME,
-        max_seq_length=MAX_SEQUENCE_LENGTH,
-        load_in_4bit=True,  # False for LoRA 16bit
-        fast_inference=True,  # Enable vLLM fast inference
-        max_lora_rank=LORA_RANK,
-        gpu_memory_utilization=0.5,  # Reduce if out of memory
-    )
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, load_in_4bit=True)
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
+    peft_config = LoraConfig(
+        r=LORA_RANK,
+        lora_alpha=LORA_RANK,
         target_modules=[
             "q_proj",
             "k_proj",
@@ -189,27 +181,26 @@ if __name__ == "__main__":
             "gate_proj",
             "up_proj",
             "down_proj",
-        ],  # Remove QKVO if out of memory
-        lora_alpha=LORA_RANK,
-        use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
-        random_state=3407,
+        ],
     )
+
+    model = get_peft_model(model, peft_config)
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
         learning_rate=5e-6,
         adam_beta1=0.9,
         adam_beta2=0.99,
-        weight_decay=0,
-        warmup_ratio=0,
+        weight_decay=0.1,
+        warmup_ratio=0.1,
         warmup_steps=15,
         lr_scheduler_type="cosine",
         optim="adamw_8bit",
         logging_steps=1,
-        bf16=is_bfloat16_supported(),
-        fp16=not is_bfloat16_supported(),
+        bf16=True,
+        fp16=False,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,  # Increase to 4 for smoother training
+        gradient_accumulation_steps=4,  # Increase to 4 for smoother training
         num_generations=16,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_OUTPUT_LENGTH,
@@ -217,7 +208,7 @@ if __name__ == "__main__":
         # num_train_epochs = 1, # Set to 1 for a full training run
         max_steps=300,
         save_steps=100,
-        max_grad_norm=0.2,
+        max_grad_norm=0.1,
         report_to="wandb",
         output_dir="outputs",
     )
@@ -233,4 +224,4 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train()
-    model.save_lora("grpo_saved_lora")
+    model.save_pretrained("outputs/sft_model/final_model_16bit")
