@@ -12,6 +12,7 @@ from datasets import load_from_disk
 import wandb
 from src.variables import (
     MAX_SEQUENCE_LENGTH,
+    MODEL_NAME,
     LORA_RANK,
     MAX_OUTPUT_LENGTH,
     MAX_PROMPT_LENGTH,
@@ -168,9 +169,8 @@ if __name__ == "__main__":
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
-    MODEL_NAME = "outputs/sft_model/final_model_16bit"
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=MODEL_NAME,
+        model_name="outputs/" + MODEL_NAME + "/sft_model/final_model_16bit",
         max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
