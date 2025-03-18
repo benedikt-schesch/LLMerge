@@ -4,4 +4,4 @@ git clone https://github.com/benedikt-schesch/LLMerge.git
 cd LLMerge
 pip install uv
 uv sync
-screen
+source .venv/bin/activate
