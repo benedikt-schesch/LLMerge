@@ -202,7 +202,7 @@ if __name__ == "__main__":
         adam_beta2=0.99,
         weight_decay=0.0,
         warmup_ratio=1.0,
-        warmup_steps=15,
+        warmup_steps=30,
         lr_scheduler_type="constant_with_warmup",
         optim="paged_adamw_8bit",
         logging_steps=1,
@@ -215,7 +215,7 @@ if __name__ == "__main__":
         max_completion_length=MAX_OUTPUT_LENGTH,
         temperature=0.9,
         # num_train_epochs = 1, # Set to 1 for a full training run
-        max_steps=300,
+        max_steps=500,
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
