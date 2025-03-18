@@ -28,10 +28,12 @@ os.environ["WANDB_PROJECT"] = "LLMerge-SFT"
 
 def train_sft(
     dataset_path: Path,
-    output_dir: Path = Path("outputs/sft_model"),
+    output_dir: Path = Path("outputs"),
 ):
     """Train a model using Supervised Fine-Tuning."""
     # Load dataset
+    output_dir = output_dir / MODEL_NAME / "sft_model"
+    output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)
 
@@ -121,7 +123,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="outputs/sft_model",
+        default="outputs",
         help="Directory to save the trained model",
     )
     args = parser.parse_args()
