@@ -5,6 +5,8 @@
 import os
 import re
 import math
+import argparse
+from pathlib import Path
 from typing import List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
@@ -165,12 +167,22 @@ def merged_conflict_reward(
 if __name__ == "__main__":
     PatchFastRL("GRPO", FastLanguageModel)
 
+    args = argparse.ArgumentParser(description="UnSloth - GRPO Training Script")
+    args.add_argument(
+        "--model_name",
+        type=str,
+        default="outputs/" + MODEL_NAME + "/sft_model/final_model_16bit",
+        help="Path to the pre-trained model",
+    )
+    args = args.parse_args()
+    model_name: str = args.model_name
+
     print("Loading dataset...")
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
 
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name="outputs/" + MODEL_NAME + "/sft_model/final_model_16bit",
+        model_name=model_name,
         max_seq_length=MAX_SEQUENCE_LENGTH,
         load_in_4bit=True,  # False for LoRA 16bit
         fast_inference=True,  # Enable vLLM fast inference
@@ -233,4 +245,9 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train()
-    model.save_lora("grpo_saved_lora")
+    if "outputs" not in model_name:
+        output_dir = Path("outputs") / MODEL_NAME / "grpo_saved_lora"
+    else:
+        output_dir = Path(model_name) / "grpo_saved_lora"
+
+    model.save_lora(output_dir)
