@@ -11,6 +11,7 @@ Loads the same dataset as in training and computes:
 
 import argparse
 from pathlib import Path
+from typing import Optional
 from tqdm import tqdm
 from loguru import logger
 import unsloth
@@ -22,7 +23,7 @@ from train import (
     format_reward,
     java_markdown_reward,
 )
-from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH
+from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH, MODEL_NAME
 from src.utils import cached_query_deepseek_api
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
@@ -61,12 +62,14 @@ def model_inference(example, model, tokenizer, text_streamer):
     return full_completion
 
 
-def get_model(model_name, load_in_4bit: bool = True):
+def get_model(
+    model_name, load_in_4bit: bool = True, lora_weights: Optional[str] = None
+):
     """Load the model and tokenizer."""
     # Load the model and tokenizer (using same parameters as in training)
     if model_name == "api/deepseek-r1":
         return "api/deepseek-r1", None, None
-    if "unsloth" in model_name or "outputs" in model_name:
+    if "unsloth" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQUENCE_LENGTH,
@@ -79,6 +82,9 @@ def get_model(model_name, load_in_4bit: bool = True):
         model = AutoModelForCausalLM.from_pretrained(model_name)
         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
+    if lora_weights:
+        model.load_adapter(lora_weights)
+
     print(f"Device: {model.device}")
     text_streamer = TextStreamer(tokenizer)  # type: ignore
     return model, tokenizer, text_streamer
@@ -90,7 +96,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--model_name",
         type=str,
-        default="api/deepseek-r1",
+        default=MODEL_NAME,
         help="Model name to load",
     )
     parser.add_argument(
@@ -113,6 +119,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         help="Dataset split to evaluate",
     )
     parser.add_argument(
+        "--lora_weights",
+        type=str,
+        default="grpo_saved_lora",
+        help="Path to the LoRA weights",
+    )
+    parser.add_argument(
         "--load_in_4bit",
         type=lambda x: str(x).lower() == "true",
         default=True,
@@ -128,6 +140,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
 
     model_name = args.model_name
     load_in_4bit = args.load_in_4bit
+    lora_weights = args.lora_weights
 
     torch.set_grad_enabled(False)
     output_dir = Path(args.output_dir)
@@ -137,7 +150,9 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     dataset_name = parts[1] if len(parts) > 2 else "default"
     output_dir = output_dir / dataset_name / args.split
 
-    if load_in_4bit:
+    if lora_weights:
+        output_dir = output_dir / f"{model_name}-{lora_weights}"
+    elif load_in_4bit:
         output_dir = output_dir / f"{model_name}-loaded-4bit"
     else:
         output_dir = output_dir / model_name
@@ -170,7 +185,9 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
             logger.info(f"Processing example {idx}...")
             # Load the model lazily if not already loaded.
             if model is None:
-                model, tokenizer, text_streamer = get_model(model_name, load_in_4bit)
+                model, tokenizer, text_streamer = get_model(
+                    model_name, load_in_4bit, lora_weights
+                )
             full_completion = model_inference(example, model, tokenizer, text_streamer)
             # Write the full completion to file.
             with open(output_file_path, "w", encoding="utf-8") as output_file:
