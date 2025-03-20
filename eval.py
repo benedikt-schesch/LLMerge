@@ -69,7 +69,7 @@ def get_model(
     # Load the model and tokenizer (using same parameters as in training)
     if model_name == "api/deepseek-r1":
         return "api/deepseek-r1", None, None
-    if "unsloth" in model_name:
+    if "unsloth" in model_name or "output" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQUENCE_LENGTH,
@@ -96,7 +96,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--model_name",
         type=str,
-        default=MODEL_NAME,
+        default="outputs/" + MODEL_NAME + "/sft_model/final_model_16bit",
         help="Model name to load",
     )
     parser.add_argument(
