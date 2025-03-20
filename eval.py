@@ -121,7 +121,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--lora_weights",
         type=str,
-        default="grpo_saved_lora",
+        default=None,
         help="Path to the LoRA weights",
     )
     parser.add_argument(
