@@ -184,7 +184,7 @@ if __name__ == "__main__":
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
         max_seq_length=MAX_SEQUENCE_LENGTH,
-        load_in_4bit=True,  # False for LoRA 16bit
+        full_finetuning=True,
         fast_inference=True,  # Enable vLLM fast inference
         max_lora_rank=LORA_RANK,
         gpu_memory_utilization=0.5,  # Reduce if out of memory

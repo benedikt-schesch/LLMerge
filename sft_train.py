@@ -42,7 +42,7 @@ def train_sft(
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=MODEL_NAME,
         max_seq_length=MAX_SEQUENCE_LENGTH,
-        load_in_4bit=True,
+        full_finetuning=True,
         max_lora_rank=LORA_RANK,
     )
 
