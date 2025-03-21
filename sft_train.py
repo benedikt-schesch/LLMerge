@@ -76,7 +76,7 @@ def train_sft(
         logging_steps=1,
         optim="adamw_8bit",
         weight_decay=0.01,
-        lr_scheduler_type="linear",
+        lr_scheduler_type="cosine",
         seed=3407,
         output_dir="outputs",
         report_to="wandb",
