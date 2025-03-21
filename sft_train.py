@@ -46,24 +46,6 @@ def train_sft(
         max_lora_rank=LORA_RANK,
     )
 
-    # Set up LoRA
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=LORA_RANK,
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-        lora_alpha=LORA_RANK,
-        use_gradient_checkpointing="unsloth",
-        random_state=3407,
-    )
-
     # Training arguments
     training_args = TrainingArguments(
         per_device_train_batch_size=2,
@@ -102,11 +84,6 @@ def train_sft(
     print(f"Saving model to {output_dir}...")
     model.save_pretrained(output_dir / "final_model")
     tokenizer.save_pretrained(output_dir / "final_model")
-    model.save_pretrained_merged(
-        output_dir / "final_model_16bit",
-        tokenizer,
-        save_method="merged_16bit",
-    )
     print("Training completed!")
 
 

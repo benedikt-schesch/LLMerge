@@ -190,23 +190,6 @@ if __name__ == "__main__":
         gpu_memory_utilization=0.5,  # Reduce if out of memory
     )
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=LORA_RANK,  # Choose any number > 0 ! Suggested 8, 16, 32, 64, 128
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],  # Remove QKVO if out of memory
-        lora_alpha=LORA_RANK,
-        use_gradient_checkpointing="unsloth",  # Enable long context finetuning # type: ignore
-        random_state=3407,
-    )
-
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
         learning_rate=3e-5,
