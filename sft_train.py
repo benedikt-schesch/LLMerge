@@ -70,7 +70,7 @@ def train_sft(
         gradient_accumulation_steps=4,
         warmup_steps=5,
         num_train_epochs=2,
-        learning_rate=1e-4,
+        learning_rate=1e-5,
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
         logging_steps=1,
