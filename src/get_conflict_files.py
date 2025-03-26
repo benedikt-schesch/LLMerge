@@ -208,13 +208,15 @@ def reproduce_merge_and_extract_conflicts(
     return result
 
 
-def collect_merges(repo_slug: str, output_dir: Path) -> pd.DataFrame:
+def collect_merges(
+    repo_slug: str, output_dir: Path, max_num_merges: int
+) -> pd.DataFrame:
     """
     Step 1: Collect merges for a single repository.
     """
     try:
         repo = get_repo(repo_slug)
-        merges = get_merges(repo, repo_slug, output_dir / "merges")
+        merges = get_merges(repo, repo_slug, output_dir / "merges", max_num_merges)
         logger.info(f"Collected merges for {repo_slug}")
     except Exception as e:
         logger.error(f"Error collecting merges for {repo_slug}: {e}")
@@ -274,6 +276,12 @@ def main():  # pylint: disable=too-many-statements
         default=42,
         help="Random seed for reproducibility (default: 42)",
     )
+    parser.add_argument(
+        "--max_num_merges",
+        type=int,
+        default=100,
+        help="Maximum number of merges to process per repository (default: 100)",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -295,7 +303,9 @@ def main():  # pylint: disable=too-many-statements
     result = []
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         tasks = {
-            executor.submit(collect_merges, row["repository"], output_dir): i
+            executor.submit(
+                collect_merges, row["repository"], output_dir, args.max_num_merges
+            ): i
             for i, (_, row) in enumerate(repos_df.iterrows())
         }
 

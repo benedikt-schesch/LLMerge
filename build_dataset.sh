@@ -14,6 +14,7 @@ RUN_METRICS=0
 RUN_BUILD=0
 KEEP_FLAG=""
 TEST_SIZE="0.2"
+MAX_NUM_MERGES=100
 
 # Parse flags
 while [[ "$#" -gt 0 ]]; do
@@ -24,6 +25,10 @@ while [[ "$#" -gt 0 ]]; do
         -keep_trivial_resolution) KEEP_FLAG="-keep_trivial_resolution" ;;
         --test_size)
             TEST_SIZE="$2"
+            shift
+            ;;
+        --max_num_merges)
+            MAX_NUM_MERGES="$2"
             shift
             ;;
         --) shift; break ;; # Stop processing options
@@ -65,7 +70,7 @@ if [ $RUN_GET_EXTRACT -eq 1 ]; then
     fi
 
     echo "Running get_conflict_files.py..."
-    python3 src/get_conflict_files.py --repos "$REPOS_DIR" --output_dir "$OUT_DIR"
+    python3 src/get_conflict_files.py --repos "$REPOS_DIR" --output_dir "$OUT_DIR" --max_num_merges "$MAX_NUM_MERGES"
 
     echo "Running extract_conflict_blocks.py..."
     python3 src/extract_conflict_blocks.py --input_dir "$OUT_DIR/conflict_files" --output_dir "$OUT_DIR/conflict_blocks"
