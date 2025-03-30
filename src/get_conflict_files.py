@@ -264,9 +264,8 @@ def main():  # pylint: disable=too-many-statements
     )
     parser.add_argument(
         "--n_threads",
-        required=False,
         type=int,
-        default=None,
+        default=1,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     parser.add_argument(

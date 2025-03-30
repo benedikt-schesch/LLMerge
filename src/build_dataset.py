@@ -81,10 +81,12 @@ def main():
         description="Prepare train/test dataset from conflict blocks."
     )
     parser.add_argument(
-        "--conflict_blocks_dir", type=str, default="merges/repos_50/conflict_blocks"
+        "--conflict_blocks_dir",
+        type=str,
+        default="merges/repos_reaper_1000/filtered_dataset",
     )
     parser.add_argument(
-        "--output_dir", type=str, default="merges/repos_50/filtered_merges"
+        "--output_dir", type=str, default="merges/repos_reaper_1000/dataset"
     )
     parser.add_argument("--test_size", type=float, default=0.2)
     parser.add_argument(

@@ -4,7 +4,7 @@
 
 MODEL_NAME = "unsloth/DeepSeek-R1-Distill-Qwen-7B"  # Model to use for generation
 MAX_OUTPUT_LENGTH = 2048  # Maximum number of tokens of the entire sequence
-MAX_PROMPT_LENGTH = 256  # Maximum number of tokens in the prompt
+MAX_PROMPT_LENGTH = 512  # Maximum number of tokens in the prompt
 LORA_RANK = 128  # Larger rank = smarter, but slower
 
 SYSTEM_PROMPT = (
