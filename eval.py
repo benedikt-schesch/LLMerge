@@ -83,7 +83,7 @@ def get_model(
         tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     if lora_weights:
-        model.load_adapter(lora_weights)
+        model.load_lora(lora_weights)
 
     print(f"Device: {model.device}")
     text_streamer = TextStreamer(tokenizer)  # type: ignore
