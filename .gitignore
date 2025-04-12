@@ -4,7 +4,9 @@
 .venv
 repos/
 gil_free_env/
-eval_outputs/
+eval_outputs*
+deepseek_cache/
+deepseek_sft/
 **.lock
 .workdir/
 **/file_conflicts
@@ -13,7 +15,7 @@ eval_outputs/
 **/conflict_files
 **/filtered_merges
 **/dataset
-outputs/
+outputs*/
 wandb/
 unsloth_compiled_cache/
 debug.txt

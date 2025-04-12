@@ -38,9 +38,9 @@ import shutil
 import pandas as pd
 from transformers import AutoTokenizer
 from loguru import logger
-from rich.progress import track
+from tqdm import tqdm
 from build_dataset import build_query
-from variables import MODEL, MAX_PROMPT_LENGTH
+from variables import MODEL_NAME, MAX_PROMPT_LENGTH
 
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -202,9 +202,9 @@ def main():  # pylint: disable=too-many-statements, too-many-locals
 
     # Prepare a list for metric rows
     rows = []
-    tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
 
-    for conflict_path in track(conflict_files):
+    for conflict_path in tqdm(conflict_files):
         # For each .conflict, find the corresponding .resolved_conflict file
         resolved_path = conflict_path.with_suffix(".resolved_conflict")
         if not resolved_path.exists():
@@ -262,36 +262,51 @@ def main():  # pylint: disable=too-many-statements, too-many-locals
 
         # Decide if this conflict should be selected based on filtering rules
         selected = True
+        row_data = {"conflict_id": identifier}
+        row_data["fail_max_lines"] = (
+            metrics["full_conflict_lines"] > args.max_line_count
+        )
+        row_data["fail_token_count"] = metrics["num_tokens_query"] > MAX_PROMPT_LENGTH
+        row_data["fail_incoherent"] = incoherent_resolution_size
 
-        # If we do NOT keep trivial resolutions, skip merges that are fully in left or right
-        if (not args.keep_trivial_resolution) and metrics[
-            "resolution_in_left_or_right"
-        ]:
-            selected = False
+        selected = not (
+            row_data["fail_max_lines"]
+            or row_data["fail_token_count"]
+            or row_data["fail_incoherent"]
+        )
 
-        # Skip if the entire conflict file exceeds max_line_count
-        if metrics["full_conflict_lines"] > args.max_line_count:
-            selected = False
-
-        # Skip if token count exceeds the model prompt limit
-        if metrics["num_tokens_query"] > MAX_PROMPT_LENGTH:
-            selected = False
-
-        if metrics["incoherent_resolution_size"]:
-            selected = False
+        # If selected, copy the conflict and resolved files to the output directory
+        if selected:
+            shutil.copy(conflict_path, output_dir / conflict_path.name)
+            shutil.copy(resolved_path, output_dir / resolved_path.name)
 
         # Prepare row data
-        row_data = {"conflict_id": identifier}
         row_data.update(metrics)  # type: ignore
         row_data["selected"] = selected  # type: ignore
         rows.append(row_data)
 
-        # If selected and an output folder was provided, copy the files
-        if selected:
-            out_conflict = output_dir / conflict_path.name
-            out_resolved = output_dir / resolved_path.name
-            shutil.copy2(conflict_path, out_conflict)
-            shutil.copy2(resolved_path, out_resolved)
+    total_merges = len(rows)
+    if total_merges > 0:
+        percentage_max_lines = (
+            sum(row["fail_max_lines"] for row in rows) / total_merges * 100
+        )
+        percentage_token = (
+            sum(row["fail_token_count"] for row in rows) / total_merges * 100
+        )
+        percentage_incoherent = (
+            sum(row["fail_incoherent"] for row in rows) / total_merges * 100
+        )
+        logger.info(
+            f"Percentage of merges failing due to max_line_count: {percentage_max_lines:.2f}%"
+        )
+        logger.info(
+            "Percentage of merges failing due to token "
+            f"count exceeding prompt limit: {percentage_token:.2f}%"
+        )
+        logger.info(
+            "Percentage of merges failing due to incoherent "
+            f"resolution: {percentage_incoherent:.2f}%"
+        )
 
     # Create a pandas DataFrame from the list of rows and write it to CSV
     df = pd.DataFrame(rows)

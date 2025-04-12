@@ -2,12 +2,10 @@
 # pylint: disable=line-too-long
 """This file contains the global variables used in the project."""
 
-MAX_NUM_MERGES = 100
-
-MODEL = "unsloth/DeepSeek-R1-Distill-Qwen-14B"  # Model to use for generation
-MAX_SEQ_LENGTH = 2048  # Maximum number of tokens of the entire sequence
-MAX_PROMPT_LENGTH = 256  # Maximum number of tokens in the prompt
-LORA_RANK = 64  # Larger rank = smarter, but slower
+MODEL_NAME = "unsloth/DeepSeek-R1-Distill-Qwen-7B"  # Model to use for generation
+MAX_OUTPUT_LENGTH = 2048  # Maximum number of tokens of the entire sequence
+MAX_PROMPT_LENGTH = 512  # Maximum number of tokens in the prompt
+LORA_RANK = 128  # Larger rank = smarter, but slower
 
 SYSTEM_PROMPT = (
     "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
@@ -15,6 +13,8 @@ SYSTEM_PROMPT = (
     "process is enclosed within <think> </think> followed by the answer, i.e., "
     "<think> reasoning process here </think> answer here"
 )
+
+MAX_SEQUENCE_LENGTH = MAX_OUTPUT_LENGTH + MAX_PROMPT_LENGTH + len(SYSTEM_PROMPT)
 
 QUERY_PROMPT = (
     "You are a semantic merge conflict resolution expert. Below is a snippet of code "

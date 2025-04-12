@@ -22,8 +22,6 @@ import pandas as pd
 from git import Commit, GitCommandError, Repo
 from loguru import logger
 
-from variables import MAX_NUM_MERGES
-
 # Create a cache folder for merge results
 CACHE_DIR = Path("merge_cache/merges")
 CACHE_DIR.mkdir(exist_ok=True, parents=True)
@@ -126,7 +124,7 @@ def get_commits_for_branch(repo: Repo, branch_ref, repo_slug: str) -> List[Commi
 
 
 def collect_branch_merges(
-    repo: Repo, branch_ref, repo_slug: str, written_shas: Set[str]
+    repo: Repo, branch_ref, repo_slug: str, written_shas: Set[str], max_num_merges: int
 ) -> List[Dict[str, str]]:
     """
     For the given branch reference, find all 2-parent merge commits.
@@ -136,7 +134,7 @@ def collect_branch_merges(
     commits = get_commits_for_branch(repo, branch_ref, repo_slug)
 
     for commit in commits:
-        if len(written_shas) >= MAX_NUM_MERGES:
+        if len(written_shas) >= max_num_merges:
             break
         if len(commit.parents) == 2:
             if commit.hexsha in written_shas:
@@ -249,7 +247,10 @@ def get_repo(repo_slug: str, log: bool = False) -> Repo:
 
 
 def collect_all_merges(
-    repo: Repo, repo_slug: str, existing_shas: Optional[Set[str]] = None
+    repo: Repo,
+    repo_slug: str,
+    existing_shas: Optional[Set[str]] = None,
+    max_num_merges: int = 100,
 ) -> pd.DataFrame:
     """
     Discover all filtered branch references, find merge commits in each,
@@ -264,9 +265,11 @@ def collect_all_merges(
     total_merges = len(written_shas)
 
     for ref in filtered_refs:
-        if total_merges >= MAX_NUM_MERGES:
+        if total_merges >= max_num_merges:
             break
-        branch_merges = collect_branch_merges(repo, ref, repo_slug, written_shas)
+        branch_merges = collect_branch_merges(
+            repo, ref, repo_slug, written_shas, max_num_merges
+        )
         rows.extend(branch_merges)
         total_merges += len(branch_merges)
 
@@ -274,7 +277,9 @@ def collect_all_merges(
     return df
 
 
-def get_merges(repo: Repo, repo_slug: str, out_dir: Path) -> pd.DataFrame:
+def get_merges(
+    repo: Repo, repo_slug: str, out_dir: Path, max_num_merges: int = 100
+) -> pd.DataFrame:
     """
     Clone/reuse a local copy of 'org/repo', fetch PR branches,
     and collect merge commits. If an existing CSV is found, we:
@@ -289,9 +294,9 @@ def get_merges(repo: Repo, repo_slug: str, out_dir: Path) -> pd.DataFrame:
     existing_df = None
     if results_path.exists():
         existing_df = pd.read_csv(results_path, index_col="merge_idx")
-        if len(existing_df) >= MAX_NUM_MERGES:
+        if existing_df is not None and len(existing_df) >= max_num_merges:
             # Already have enough merges for this repo
-            return existing_df.head(MAX_NUM_MERGES)
+            return existing_df.head(max_num_merges)
 
     logger.info(f"{repo_slug:<30} STARTED")
 
@@ -305,7 +310,9 @@ def get_merges(repo: Repo, repo_slug: str, out_dir: Path) -> pd.DataFrame:
         existing_shas = set()
 
     # Collect new merges (skipping existing_shas)
-    new_df = collect_all_merges(repo, repo_slug, existing_shas=existing_shas)
+    new_df = collect_all_merges(
+        repo, repo_slug, existing_shas=existing_shas, max_num_merges=max_num_merges
+    )
 
     if not new_df.empty:
         # Combine the new merges with any existing ones
@@ -316,9 +323,9 @@ def get_merges(repo: Repo, repo_slug: str, out_dir: Path) -> pd.DataFrame:
         else:
             combined_df = new_df
 
-        # Truncate to MAX_NUM_MERGES if needed
-        if len(combined_df) > MAX_NUM_MERGES:
-            combined_df = combined_df.head(MAX_NUM_MERGES)
+        # Truncate to max_num_merges if needed
+        if len(combined_df) > max_num_merges:
+            combined_df = combined_df.head(max_num_merges)
     else:
         # No new merges found, so just use existing
         combined_df = existing_df if existing_df is not None else pd.DataFrame()

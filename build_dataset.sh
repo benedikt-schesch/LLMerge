@@ -13,6 +13,8 @@ RUN_GET_EXTRACT=0
 RUN_METRICS=0
 RUN_BUILD=0
 KEEP_FLAG=""
+TEST_SIZE="0.2"
+MAX_NUM_MERGES=100
 
 # Parse flags
 while [[ "$#" -gt 0 ]]; do
@@ -21,6 +23,14 @@ while [[ "$#" -gt 0 ]]; do
         -m) RUN_METRICS=1 ;;
         -b) RUN_BUILD=1 ;;
         -keep_trivial_resolution) KEEP_FLAG="-keep_trivial_resolution" ;;
+        --test_size)
+            TEST_SIZE="$2"
+            shift
+            ;;
+        --max_num_merges)
+            MAX_NUM_MERGES="$2"
+            shift
+            ;;
         --) shift; break ;; # Stop processing options
         -*)
             echo "Invalid option: $1" >&2
@@ -41,6 +51,16 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+echo "Running with the following parameters:"
+echo "REPOS_DIR: $REPOS_DIR"
+echo "OUT_DIR: $OUT_DIR"
+echo "RUN_GET_EXTRACT: $RUN_GET_EXTRACT"
+echo "RUN_METRICS: $RUN_METRICS"
+echo "RUN_BUILD: $RUN_BUILD"
+echo "KEEP_FLAG: $KEEP_FLAG"
+echo "TEST_SIZE: $TEST_SIZE"
+echo "MAX_NUM_MERGES: $MAX_NUM_MERGES"
+
 # Check if required arguments are provided
 if [ -z "$REPOS_DIR" ] || [ -z "$OUT_DIR" ]; then
     echo "Usage: $0 -g -m -b REPOS_DIR OUT_DIR [-keep_trivial_resolution]" >&2
@@ -52,8 +72,15 @@ if [ $RUN_GET_EXTRACT -eq 1 ]; then
     rm -f run.log
     rm -rf .workdir
 
+    if [ -d "$OUT_DIR/conflict_files" ]; then
+        rm -r "$OUT_DIR/conflict_files"
+    fi
+    if [ -d "$OUT_DIR/conflict_blocks" ]; then
+        rm -r "$OUT_DIR/conflict_blocks"
+    fi
+
     echo "Running get_conflict_files.py..."
-    python3 src/get_conflict_files.py --repos "$REPOS_DIR" --output_dir "$OUT_DIR"
+    python3 src/get_conflict_files.py --repos "$REPOS_DIR" --output_dir "$OUT_DIR" --max_num_merges "$MAX_NUM_MERGES"
 
     echo "Running extract_conflict_blocks.py..."
     python3 src/extract_conflict_blocks.py --input_dir "$OUT_DIR/conflict_files" --output_dir "$OUT_DIR/conflict_blocks"
@@ -61,7 +88,9 @@ fi
 
 if [ $RUN_METRICS -eq 1 ]; then
     echo "Running metrics_conflict_blocks.py..."
-    rm -r "$OUT_DIR/filtered_dataset"
+    if [ -d "$OUT_DIR/filtered_dataset" ]; then
+        rm -r "$OUT_DIR/filtered_dataset"
+    fi
     python3 src/metrics_conflict_blocks.py \
         --input_dir "$OUT_DIR/conflict_blocks" \
         --filtered_output_dir "$OUT_DIR/filtered_dataset" \
@@ -70,6 +99,12 @@ fi
 
 if [ $RUN_BUILD -eq 1 ]; then
     echo "Running build_dataset.py..."
+    if [ -d "$OUT_DIR/dataset" ]; then
+        rm -r "$OUT_DIR/dataset"
+    fi
     rm -r "$OUT_DIR/dataset"
-    python3 src/build_dataset.py --conflict_blocks_dir "$OUT_DIR/filtered_dataset" --output_dir "$OUT_DIR/dataset"
+    python3 src/build_dataset.py \
+        --conflict_blocks_dir "$OUT_DIR/filtered_dataset" \
+        --output_dir "$OUT_DIR/dataset" \
+        --test_size "$TEST_SIZE"
 fi

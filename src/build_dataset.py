@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """Builds a dataset from the conflict blocks."""
 
-import argparse
 import os
+import argparse
+import random
 from pathlib import Path
 from typing import Dict, Union, List
+import numpy as np
 from datasets import Dataset, DatasetDict
-from rich.progress import track
+from tqdm import tqdm
 from loguru import logger
+import torch
 from variables import SYSTEM_PROMPT, QUERY_PROMPT
 
 logger.add("run.log", backtrace=True, diagnose=True)
@@ -20,12 +23,11 @@ def build_query(query: str) -> str:
 
 def load_conflict_dataset(directory: str) -> Dataset:
     """Loads the conflict dataset from the given directory."""
+    # Sort by name deterministically to ensure reproducible dataset creation
     conflict_files = sorted(Path(directory).glob("*.conflict"))
     queries, solutions = [], []
 
-    for conflict_file in track(
-        conflict_files, description="Processing conflict files..."
-    ):
+    for conflict_file in tqdm(conflict_files):
         resolved_file = conflict_file.with_name(
             conflict_file.stem + ".resolved_conflict"
         )
@@ -55,6 +57,18 @@ def prepare_dataset(
 ) -> DatasetDict:
     """Prepare the dataset for training and testing."""
     dataset = load_conflict_dataset(directory)
+
+    # Handle edge cases for test_size 0 or 1
+    if not test_size:
+        # All data in train, test empty
+        dataset = dataset.map(format_conversation)
+        empty_test = dataset.select([])
+        return DatasetDict({"train": dataset, "test": empty_test})
+    if test_size == 1:
+        # All data in test, train empty
+        dataset = dataset.map(format_conversation)
+        empty_train = dataset.select([])
+        return DatasetDict({"train": empty_train, "test": dataset})
     splits = dataset.train_test_split(test_size=test_size, seed=seed)
     splits["train"] = splits["train"].map(format_conversation)
     splits["test"] = splits["test"].map(format_conversation)
@@ -67,14 +81,24 @@ def main():
         description="Prepare train/test dataset from conflict blocks."
     )
     parser.add_argument(
-        "--conflict_blocks_dir", type=str, default="merges/repos_50/conflict_blocks"
+        "--conflict_blocks_dir",
+        type=str,
+        default="merges/repos_reaper_1000/filtered_dataset",
     )
     parser.add_argument(
-        "--output_dir", type=str, default="merges/repos_50/filtered_merges"
+        "--output_dir", type=str, default="merges/repos_reaper_1000/dataset"
     )
     parser.add_argument("--test_size", type=float, default=0.2)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
+    )
     args = parser.parse_args()
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+    torch.manual_seed(args.seed)
 
     dataset = prepare_dataset(args.conflict_blocks_dir, args.test_size, args.seed)
     logger.info(f"Train set size: {len(dataset['train'])}")
