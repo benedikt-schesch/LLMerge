@@ -220,7 +220,7 @@ if __name__ == "__main__":
         logging_steps=1,
         bf16=is_bfloat16_supported(),
         fp16=not is_bfloat16_supported(),
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=1,
         gradient_accumulation_steps=4,  # Increase to 4 for smoother training
         num_generations=16,  # Decrease if out of memory
         max_prompt_length=MAX_PROMPT_LENGTH,
