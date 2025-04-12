@@ -23,7 +23,7 @@ from train import (
     format_reward,
     java_markdown_reward,
 )
-from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH, MODEL_NAME
+from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH
 from src.utils import cached_query_deepseek_api
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
@@ -96,7 +96,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--model_name",
         type=str,
-        default="outputs/" + MODEL_NAME + "/sft_model/final_model_16bit",
+        default="api/deepseek-r1",
         help="Model name to load",
     )
     parser.add_argument(

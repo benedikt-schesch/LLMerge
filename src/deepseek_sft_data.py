@@ -123,7 +123,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="merges/repos_reaper_1000/dataset",
+        default="merges/repos_reaper_test/dataset",
         help="Path to the dataset",
     )
     parser.add_argument(
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         "--split",
         type=str,
         choices=["train", "test"],
-        default="train",
+        default="test",
         help="Dataset split to process",
     )
     args = parser.parse_args()
