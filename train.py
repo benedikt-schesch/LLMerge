@@ -171,7 +171,7 @@ if __name__ == "__main__":
     args.add_argument(
         "--model_name",
         type=str,
-        default="outputs/" + MODEL_NAME + "/sft_model/final_model_16bit",
+        default=MODEL_NAME,
         help="Path to the pre-trained model",
     )
     args = args.parse_args()
