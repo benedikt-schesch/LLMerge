@@ -12,6 +12,7 @@ Loads the same dataset as in training and computes:
 import argparse
 from pathlib import Path
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from loguru import logger
 import unsloth
@@ -23,8 +24,28 @@ from train import (
     format_reward,
     java_markdown_reward,
 )
-from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH, MODEL_NAME
-from src.utils import cached_query_deepseek_api
+from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH
+from src.utils import cached_query_deepseek_api, cached_query_openrouter
+
+# Define remote/api model identification
+API_MODEL_NAMES = {"api/deepseek-r1", "o3"}
+API_MODEL_PREFIXES = (
+    "openai",
+    "anthropic",
+    "qwen",
+    "meta",
+    "google",
+    "x-ai",
+    "deepseek",
+)
+
+
+def is_api_model(model_name: str) -> bool:
+    """Check if the model is an API model."""
+    return model_name in API_MODEL_NAMES or any(
+        model_name.startswith(prefix) for prefix in API_MODEL_PREFIXES
+    )
+
 
 open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-using-with
 logger.add("eval.log", backtrace=True, diagnose=True)
@@ -39,6 +60,16 @@ def model_inference(example, model, tokenizer, text_streamer):
             return ""
         reasoning = response["reasoning"]
         result = response["result"]
+        # Combine them into a single string that the rest of the eval script expects
+        full_completion = f"<think>\n{reasoning}</think>\n{result}"
+        return full_completion
+    if isinstance(model, str) and is_api_model(model):
+        # Bypass local model and call openrouter's query_openrouter
+        response = cached_query_openrouter(example["question"], model)
+        if response is None:
+            return ""
+        result = response["result"]
+        reasoning = getattr(result, "reasoning", "No reasoning found")
         # Combine them into a single string that the rest of the eval script expects
         full_completion = f"<think>\n{reasoning}</think>\n{result}"
         return full_completion
@@ -69,6 +100,8 @@ def get_model(
     # Load the model and tokenizer (using same parameters as in training)
     if model_name == "api/deepseek-r1":
         return "api/deepseek-r1", None, None
+    if is_api_model(model_name):
+        return model_name, None, None
     if "unsloth" in model_name or "output" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
@@ -96,7 +129,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--model_name",
         type=str,
-        default=MODEL_NAME,
+        default="openai/gpt-4.1",
         help="Model name to load",
     )
     parser.add_argument(
@@ -127,7 +160,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--load_in_4bit",
         type=lambda x: str(x).lower() == "true",
-        default=True,
+        default=False,
         help="Load model in 4bit mode",
     )
     args = parser.parse_args()
@@ -172,6 +205,30 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     count_resolved_semantically = 0
 
     # Loop over the examples in the dataset.
+    # Pre-generate full completions in parallel for remote models
+    if is_api_model(model_name):
+        if model is None:
+            model, tokenizer, text_streamer = get_model(
+                model_name, load_in_4bit, lora_weights
+            )
+
+        def _gen(args):
+            idx, example = args
+            output_file_path = output_dir / f"example_{idx}.txt"
+            if not output_file_path.exists():
+                logger.info(f"Parallel processing example {idx}...")
+                full = model_inference(example, model, tokenizer, text_streamer)
+                output_file_path.write_text(full, encoding="utf-8")
+
+        with ThreadPoolExecutor(max_workers=32) as executor:
+            # Show progress bar for parallel pre-generation
+            list(
+                tqdm(
+                    executor.map(_gen, enumerate(dataset)),
+                    total=len(dataset),
+                    desc="Pre-generating full completions",
+                )
+            )
     pbar = tqdm(dataset)
     for idx, example in enumerate(pbar):
         total += 1
@@ -196,7 +253,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
             completion = full_completion.split("<｜Assistant｜>", 1)[1]
         elif "<|im_start|>assistant" in full_completion:
             completion = full_completion.split("<|im_start|>assistant", 1)[1]
-        elif model_name == "api/deepseek-r1":
+        elif is_api_model(model_name):
             completion = full_completion
         else:
             raise ValueError("Could not find completion in full output.")
