@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
-        learning_rate=5e-5,
+        learning_rate=1e-5,
         adam_beta1=0.9,
         adam_beta2=0.99,
         weight_decay=0.0,
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         max_completion_length=MAX_OUTPUT_LENGTH,
         temperature=0.9,
         # num_train_epochs = 1, # Set to 1 for a full training run
-        max_steps=2000,
+        max_steps=2500,
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
@@ -241,10 +241,11 @@ if __name__ == "__main__":
             format_reward,
             merged_conflict_reward,
         ],
+        resume_from_checkpoint="outputs/checkpoint-1500/",
         args=training_args,
         train_dataset=dataset["train"],  # type: ignore
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint = True)
     if "outputs" not in model_name:
         output_dir = Path("outputs") / MODEL_NAME / "grpo_saved_lora"
     else:
