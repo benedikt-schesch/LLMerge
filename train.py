@@ -251,7 +251,7 @@ if __name__ == "__main__":
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
-        output_dir="outputs",
+        output_dir=f"outputs/{MODEL_NAME}",
     )
 
     trainer = GRPOTrainer(

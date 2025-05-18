@@ -24,7 +24,7 @@ from train import (
     format_reward,
     java_markdown_reward,
 )
-from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH
+from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH, MODEL_NAME
 from src.utils import cached_query_deepseek_api, cached_query_openrouter
 
 # Define remote/api model identification
@@ -129,7 +129,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parser.add_argument(
         "--model_name",
         type=str,
-        default="openai/gpt-4.1",
+        default=MODEL_NAME,
         help="Model name to load",
     )
     parser.add_argument(
@@ -182,14 +182,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     parts = args.dataset_path.split("/")
     dataset_name = parts[1] if len(parts) > 2 else "default"
     output_dir = output_dir / dataset_name / args.split
-
     if lora_weights:
-        output_dir = output_dir / f"{model_name}-{lora_weights}"
+        output_dir = output_dir / lora_weights
     elif load_in_4bit:
         output_dir = output_dir / f"{model_name}-loaded-4bit"
     else:
         output_dir = output_dir / model_name
-
     # Set up file to store full outputs before truncation.
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.add(output_dir / "eval.log", backtrace=True, diagnose=True)
@@ -234,6 +232,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         total += 1
 
         output_file_path = output_dir / f"example_{idx}.txt"
+        print(f"Output file path: {output_file_path}")
         if output_file_path.exists():
             logger.info(f"Loading example {idx} from file...")
             with open(output_file_path, "r", encoding="utf-8") as f:

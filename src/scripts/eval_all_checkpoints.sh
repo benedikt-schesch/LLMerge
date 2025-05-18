@@ -24,7 +24,7 @@ while IFS= read -r dir; do
     running=$((running + 1))
     count=$((count + 1))
   fi
-done < <(ls -d outputs/checkpoint-* 2>/dev/null | sort -t- -k2 -n -r)
+done < <(ls -d outputs/unsloth/DeepSeek-R1-Distill-Qwen-14B/checkpoint-* 2>/dev/null | sort -t- -k2 -n -r)
 
 # Wait for all remaining background jobs
 echo "Waiting for $running remaining jobs to complete..."
