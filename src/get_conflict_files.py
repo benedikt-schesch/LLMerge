@@ -20,7 +20,7 @@ list of conflict file IDs.
 """
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
 import os
 import shutil
@@ -119,6 +119,7 @@ def copy_conflicting_files_and_goal(
     return conflicts
 
 
+@timeout_decorator.timeout(5 * 60, use_signals=False)
 def reproduce_merge_and_extract_conflicts(
     repo_slug: str,
     left_sha: str,
@@ -126,6 +127,8 @@ def reproduce_merge_and_extract_conflicts(
     merge_sha: str,
     output_dir: Path,
     merge_id: int,
+    conflict_cache_folder: Path,
+    resolved_merge_cache_folder: Path,
 ) -> List[str]:
     """
     Checkout left_sha, merge right_sha.
@@ -135,13 +138,8 @@ def reproduce_merge_and_extract_conflicts(
     If the cache already exists, the cached files are simply copied over.
     Returns the list of conflict IDs for this merge.
     """
-    cache_folder = Path("merge_cache/conflicts") / repo_slug / merge_sha
-    conflict_cache_folder = cache_folder / "conflict"
-    final_cache_folder = cache_folder / "final_merged"
-
     # Check if cache exists (both subdirectories must be present)
-    if conflict_cache_folder.exists() and final_cache_folder.exists():
-        logger.info(f"Using cached merge for {merge_sha} from {cache_folder}")
+    if conflict_cache_folder.exists() and resolved_merge_cache_folder.exists():
         cached_conflict_files = sorted(conflict_cache_folder.iterdir())
         conflicts = []
         for i, cached_file in enumerate(cached_conflict_files):
@@ -151,7 +149,7 @@ def reproduce_merge_and_extract_conflicts(
             destination_conflict.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(cached_file, destination_conflict)
             # Look for corresponding final merged file using the same original filename
-            final_file = final_cache_folder / cached_file.name
+            final_file = resolved_merge_cache_folder / cached_file.name
             if final_file.is_file():
                 shutil.copy2(final_file, destination_final)
             conflicts.append(conflict_id)
@@ -160,7 +158,7 @@ def reproduce_merge_and_extract_conflicts(
     # No cache exists, so reproduce the merge.
     logger.info(f"Reproducing merge {merge_sha} for {repo_slug}")
     conflict_cache_folder.mkdir(parents=True, exist_ok=True)
-    final_cache_folder.mkdir(parents=True, exist_ok=True)
+    resolved_merge_cache_folder.mkdir(parents=True, exist_ok=True)
     repo = get_repo(repo_slug)
     temp_dir = WORKING_DIR / f"{repo_slug}_merge_{merge_id}"
     shutil.copytree(repo.working_dir, temp_dir, dirs_exist_ok=True)
@@ -201,10 +199,9 @@ def reproduce_merge_and_extract_conflicts(
                 shutil.copy2(src_conflict, dst_conflict)
             # Cache final merged file
             src_final = output_dir / f"{conflict_id}.final_merged"
-            dst_final = final_cache_folder / original_name
+            dst_final = resolved_merge_cache_folder / original_name
             if src_final.is_file():
                 shutil.copy2(src_final, dst_final)
-    shutil.rmtree(temp_dir, ignore_errors=True)
     return result
 
 
@@ -216,40 +213,55 @@ def collect_merges(
     """
     try:
         repo = get_repo(repo_slug)
-        merges = get_merges(repo, repo_slug, output_dir / "merges", max_num_merges)
-        logger.info(f"Collected merges for {repo_slug}")
     except Exception as e:
-        logger.error(f"Error collecting merges for {repo_slug}: {e}")
+        logger.error(f"Error getting repo {repo_slug}: {e}")
         return pd.DataFrame()
+    merges = get_merges(repo, repo_slug, output_dir / "merges", max_num_merges)
     return merges
 
 
-@timeout_decorator.timeout(5 * 60, use_signals=False)
 def process_merge(merge_row, output_dir: Path) -> tuple:
     """
     Step 2: Process a single merge to extract conflict files.
     """
-    repo_slug = merge_row["repository"]
     merge_id = merge_row.name
+    repo_slug = merge_row["repository"]
+    cache_folder = Path("merge_cache/conflicts") / repo_slug / merge_row["merge_commit"]
+    conflict_cache_folder = cache_folder / "conflict"
+    resolved_merge_cache_folder = cache_folder / "final_merged"
     try:
         conflicts = reproduce_merge_and_extract_conflicts(
-            repo_slug=repo_slug,
+            repo_slug=merge_row["repository"],
             left_sha=merge_row["parent_1"],
             right_sha=merge_row["parent_2"],
             merge_sha=merge_row["merge_commit"],
             output_dir=output_dir / "conflict_files",
             merge_id=merge_id,
+            conflict_cache_folder=conflict_cache_folder,
+            resolved_merge_cache_folder=resolved_merge_cache_folder,
         )
         conflict_str = ";".join(conflicts)
+        shutil.rmtree(WORKING_DIR / f"{repo_slug}_merge_{merge_id}", ignore_errors=True)
         return merge_id, conflict_str
+    except timeout_decorator.TimeoutError:
+        logger.error(f"Timeout for merge {merge_row['merge_commit']} in {repo_slug}")
+        # The content of the cache folder might be corrupt, so delete the content of it
+        # but keep the folder itself to avoid re-creating it
+        if conflict_cache_folder.exists():
+            for file in conflict_cache_folder.iterdir():
+                file.unlink()
+        if resolved_merge_cache_folder.exists():
+            for file in resolved_merge_cache_folder.iterdir():
+                file.unlink()
     except Exception as e:
         logger.error(
             f"Error processing merge {merge_row['merge_commit']} in {repo_slug}: {e}"
         )
+    shutil.rmtree(WORKING_DIR / f"{repo_slug}_merge_{merge_id}", ignore_errors=True)
     return merge_id, ""
 
 
-def main():  # pylint: disable=too-many-statements
+def main():
     """Main function with two steps: collect merges, then extract conflict files."""
     parser = argparse.ArgumentParser(description="Extract conflict files from merges.")
     parser.add_argument(
@@ -265,7 +277,7 @@ def main():  # pylint: disable=too-many-statements
     parser.add_argument(
         "--n_threads",
         type=int,
-        default=1,
+        default=None,
         help="Number of parallel threads (if not specified: use all CPU cores)",
     )
     parser.add_argument(
@@ -300,7 +312,7 @@ def main():  # pylint: disable=too-many-statements
 
     # For deterministic results, process in ordered batches
     result = []
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
         tasks = {
             executor.submit(
                 collect_merges, row["repository"], output_dir, args.max_num_merges
@@ -313,10 +325,7 @@ def main():  # pylint: disable=too-many-statements
         ordered_futures = [f for _, f in futures_by_index]
 
         for future in tqdm(as_completed(tasks)):
-            try:
-                result.append(future.result())
-            except Exception as exc:
-                logger.error(f"Worker thread raised an exception: {exc}")
+            result.append(future.result())
 
     # Combine all merge CSVs
     all_merges_df = pd.concat(result)
@@ -341,7 +350,7 @@ def main():  # pylint: disable=too-many-statements
     )
     all_merges_df["conflicts"] = ""
 
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures_dict = {
             executor.submit(process_merge, merge_row, output_dir): merge_id
             for merge_id, merge_row in all_merges_df.iterrows()
@@ -355,13 +364,8 @@ def main():  # pylint: disable=too-many-statements
 
         # Process each future in deterministic order
         for future, merge_id in tqdm(ordered_futures):
-            try:
-                _, conflict_str = future.result()
-                all_merges_df.loc[merge_id, "conflicts"] = conflict_str  # type: ignore
-            except timeout_decorator.TimeoutError:
-                logger.error(f"Task for merge_id {merge_id} timed out.")
-            except Exception as e:
-                logger.error(f"Error processing merge_id {merge_id}: {e}")
+            _, conflict_str = future.result()
+            all_merges_df.loc[merge_id, "conflicts"] = conflict_str  # type: ignore
 
     # Combine all results
     all_merges_df = all_merges_df[all_merges_df["conflicts"] != ""]  # pylint: disable=use-implicit-booleaness-not-comparison-to-string

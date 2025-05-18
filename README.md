@@ -17,6 +17,23 @@ uv sync
 source .venv/bin/activate
 ```
 
+## Evaluate Dataset
+
+```bash
+python3 eval.py --model_name openai/gpt-4.1
+python3 eval.py --model_name anthropic/claude-3.7-sonnet
+python3 eval.py --model_name meta-llama/llama-4-maverick
+python3 eval.py --model_name meta-llama/llama-3.3-70b-instruct
+python3 eval.py --model_name google/gemini-2.5-pro-preview
+python3 eval.py --model_name qwen/qwen3-235b-a22b
+python3 eval.py --model_name x-ai/grok-3-beta
+python3 eval.py --model_name qwen/qwq-32b
+python3 eval.py --model_name o3
+
+# Smaller models
+python3 eval.py --model_name qwen/qwen3-14b
+```
+
 ## Faster dataset construction with GIL-Free Python
 
 The dataset building part relies on multithreading which is slowed down by the Python GIL.

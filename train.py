@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
-        learning_rate=5e-5,
+        learning_rate=1e-5,  # 5e-5
         adam_beta1=0.9,
         adam_beta2=0.99,
         weight_decay=0.0,
@@ -244,7 +244,7 @@ if __name__ == "__main__":
         args=training_args,
         train_dataset=dataset["train"],  # type: ignore
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=True)
     if "outputs" not in model_name:
         output_dir = Path("outputs") / MODEL_NAME / "grpo_saved_lora"
     else:
