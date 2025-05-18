@@ -40,7 +40,6 @@ Evaluation results 🚀:
 - [Training 🚀](#training)
 - [Evaluation 📊](#evaluation)
 - [Project Structure](#project-structure)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Features ✨
@@ -161,10 +160,6 @@ Results will be saved to `tables/results_table.tex`.
 ├── README.md
 └── LICENSE
 ```
-
-## Contributing
-
-Contributions are welcome! Please open issues or pull requests on GitHub.
 
 ## License
 

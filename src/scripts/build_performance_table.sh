@@ -42,21 +42,21 @@ MODELS=(
 
 
 # ─── 3b. Run evaluation scripts in parallel ─────────────────────────────────
-# echo "🚀 Running evaluations for models: ${MODELS[*]}"
-# # ensure base directory exists
-# mkdir -p "$ROOT_DIR"
-#  # use GNU parallel to run as many evals as there are processors
-# printf "%s\n" "${MODELS[@]}" | parallel -j "$(nproc)" --bar '
-#   model={};
-#   echo "🛠 Running eval for $model";
-#   if [[ "$model" == outputs/* ]]; then
-#     python3 eval.py --lora_weights "$model" > /dev/null 2>&1
-#   else
-#     python3 eval.py --model_name "$model" > /dev/null 2>&1
-#   fi
-#   echo "✅ Finished eval for $model";
-# '
-# echo "✅ All evaluations completed"
+echo "🚀 Running evaluations for models: ${MODELS[*]}"
+# ensure base directory exists
+mkdir -p "$ROOT_DIR"
+# use GNU parallel to run as many evals as there are processors
+printf "%s\n" "${MODELS[@]}" | parallel -j "$(nproc)" --bar '
+  model={};
+  echo "🛠 Running eval for $model";
+  if [[ "$model" == outputs/* ]]; then
+    python3 eval.py --lora_weights "$model" > /dev/null 2>&1
+  else
+    python3 eval.py --model_name "$model" > /dev/null 2>&1
+  fi
+  echo "✅ Finished eval for $model";
+'
+echo "✅ All evaluations completed"
 
 # ─── 4. Start the LaTeX table ────────────────────────────────────────────────
 cat << 'EOF' > "$OUTPUT_FILE"
