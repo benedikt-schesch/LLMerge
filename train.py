@@ -241,6 +241,7 @@ if __name__ == "__main__":
             format_reward,
             merged_conflict_reward,
         ],
+        resume_from_checkpoint="outputs/checkpoint-1500/",
         args=training_args,
         train_dataset=dataset["train"],  # type: ignore
     )
