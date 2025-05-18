@@ -167,15 +167,35 @@ def merged_conflict_reward(
 if __name__ == "__main__":
     PatchFastRL("GRPO", FastLanguageModel)
 
-    args = argparse.ArgumentParser(description="UnSloth - GRPO Training Script")
-    args.add_argument(
+    parser = argparse.ArgumentParser(description="UnSloth - GRPO Training Script")
+    parser.add_argument(
         "--model_name",
         type=str,
         default=MODEL_NAME,
         help="Path to the pre-trained model",
     )
-    args = args.parse_args()
-    model_name: str = args.model_name
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-5,
+        help="Learning rate for training",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=1,
+        help="Number of training epochs",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from the last checkpoint",
+    )
+    args = parser.parse_args()
+    model_name = args.model_name
+    learning_rate = args.learning_rate
+    epochs = args.epochs
+    resume = args.resume
 
     print("Loading dataset...")
 
@@ -209,7 +229,7 @@ if __name__ == "__main__":
 
     training_args = GRPOConfig(
         use_vllm=True,  # use vLLM for fast inference!
-        learning_rate=1e-5,
+        learning_rate=learning_rate,
         adam_beta1=0.9,
         adam_beta2=0.99,
         weight_decay=0.0,
@@ -226,7 +246,7 @@ if __name__ == "__main__":
         max_prompt_length=MAX_PROMPT_LENGTH,
         max_completion_length=MAX_OUTPUT_LENGTH,
         temperature=0.9,
-        # num_train_epochs = 1, # Set to 1 for a full training run
+        num_train_epochs=epochs,
         max_steps=2500,
         save_steps=100,
         max_grad_norm=0.2,
@@ -241,11 +261,10 @@ if __name__ == "__main__":
             format_reward,
             merged_conflict_reward,
         ],
-        resume_from_checkpoint="outputs/checkpoint-1500/",
         args=training_args,
         train_dataset=dataset["train"],  # type: ignore
     )
-    trainer.train(resume_from_checkpoint = True)
+    trainer.train(resume_from_checkpoint=resume)
     if "outputs" not in model_name:
         output_dir = Path("outputs") / MODEL_NAME / "grpo_saved_lora"
     else:
