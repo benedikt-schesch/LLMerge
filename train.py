@@ -177,7 +177,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-5,
+        default=5e-5,
         help="Learning rate for training",
     )
     parser.add_argument(

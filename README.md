@@ -45,6 +45,20 @@ PYTHON_GIL=0 ./build_dataset_small.sh
 ./build_dataset_small.sh
 ```
 
+### Official Training Procedure
+
+The official training consists of two consecutive steps:
+
+**Step 1** – Train for 1500 epochs with a learning rate of 5e-5:
+```bash
+python3 train.py --epochs 1500 --learning_rate 5e-5
+```
+
+**Step 2** – Resume training from checkpoint with 2000 more epochs at a reduced learning rate of 1e-5:
+```bash
+python3 train.py --epochs 2000 --learning_rate 1e-5 --resume
+```
+
 ## Test set construction
 
 ```bash
