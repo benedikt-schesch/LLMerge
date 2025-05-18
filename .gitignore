@@ -20,6 +20,7 @@ wandb/
 unsloth_compiled_cache/
 debug.txt
 grpo_trainer_lora_model
+query_cache/
 
 # Compiled class file
 *.class
