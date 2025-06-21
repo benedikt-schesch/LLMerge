@@ -49,14 +49,48 @@ mkdir -p "$ROOT_DIR"
 printf "%s\n" "${MODELS[@]}" | parallel -j "$(nproc)" --bar '
   model={};
   echo "🛠 Running eval for $model";
+  # Add model_name to the python script call
   if [[ "$model" == outputs/* ]]; then
-    python3 eval.py --lora_weights "$model" > /dev/null 2>&1
+    python3 eval.py --lora_weights "$model" --model_name "$model" > /dev/null 2>&1
   else
     python3 eval.py --model_name "$model" > /dev/null 2>&1
   fi
   echo "✅ Finished eval for $model";
 '
 echo "✅ All evaluations completed"
+
+
+# ─── 3c. Concatenate all individual CSVs into one big file ──────────────────
+COMBINED_CSV="tables/all_results_combined.csv"
+echo "🤝 Concatenating all individual CSV results into $COMBINED_CSV..."
+
+# Find all evaluation_results.csv files within the specified model directories
+CSV_FILES=()
+for model in "${MODELS[@]}"; do
+    # Sanitize model name for path
+    model_path="$model"
+    if [[ "$model" == outputs/* ]]; then
+        # For lora weights, the model name passed to eval.py is the same as the path
+        model_path=$(basename "$(dirname "$model")")
+    fi
+    csv_file="$ROOT_DIR/$model/evaluation_results.csv"
+    if [[ -f "$csv_file" ]]; then
+        CSV_FILES+=("$csv_file")
+    else
+        echo "🤔 Note: Could not find CSV for model $model at $csv_file"
+    fi
+done
+
+if [ ${#CSV_FILES[@]} -eq 0 ]; then
+    echo "⚠️ No 'evaluation_results.csv' files were found to concatenate."
+else
+    # Use awk to efficiently merge the CSVs: print header from the first file,
+    # then print the data rows from all other files.
+    awk 'FNR==1 && NR!=1 {next} {print}' "${CSV_FILES[@]}" > "$COMBINED_CSV"
+    echo "✅ Successfully created combined CSV at $COMBINED_CSV"
+fi
+echo # Blank line for readability
+
 
 # ─── 4. Start the LaTeX table ────────────────────────────────────────────────
 cat << 'EOF' > "$OUTPUT_FILE"
@@ -115,7 +149,28 @@ for model in "${MODELS[@]}"; do
 done
 
 echo "📝 Finished processing all eval.log files"
-# ─── 5. Close out the table ───────────────────────────────────────────────────
+# ─── 5. Include best SFT model if available ──────────────────────────────────
+SFT_MD="tables/results_table_sft.md"
+if [[ -f "$SFT_MD" ]]; then
+    echo "⚙️ Processing best SFT model from $SFT_MD"
+    # skip header (2 lines), sort by 5th column (Correct merges), pick top
+    best_line=$(tail -n +3 "$SFT_MD" | sort -t '|' -k5 -nr | head -n1)
+    # split on '|' into fields (ignore leading/trailing empties)
+    IFS='|' read -r _ epochs lr decay sched correct semantic raise valid _ <<< "$best_line"
+    # strip trailing % signs
+    correct=${correct//%/}
+    semantic=${semantic//%/}
+    raise=${raise//%/}
+    valid=${valid//%/}
+    display_model="Best SFT model"
+    # append to LaTeX table
+    echo "${display_model} & ${correct}\\% & ${semantic}\\% & ${raise}\\% & ${valid}\\% \\\\" >> "$OUTPUT_FILE"
+    # append to markdown table
+    echo "| ${display_model} | ${correct}% | ${semantic}% | ${raise}% | ${valid}% |" >> "$MD_OUTPUT_FILE"
+    echo "✅ Added Best SFT model to table"
+fi
+
+# ─── 6. Close out the table ───────────────────────────────────────────────────
 cat << 'EOF' >> "$OUTPUT_FILE"
 \bottomrule
 \end{tabular}
@@ -123,7 +178,7 @@ cat << 'EOF' >> "$OUTPUT_FILE"
 \end{table}
 EOF
 
-# ─── 6. Generate JPEG version of the table ───────────────────────────────────
+# ─── 7. Generate JPEG version of the table ───────────────────────────────────
 JPEG_OUTPUT_FILE="$(dirname "$OUTPUT_FILE")/results_table.jpg"
 TEX_WRAPPER="$(dirname "$OUTPUT_FILE")/results_table_wrapper.tex"
 cat << LATEX > "$TEX_WRAPPER"
@@ -144,7 +199,7 @@ PDF_FILE="$(dirname "$OUTPUT_FILE")/results_table_wrapper.pdf"
 convert -density 300 "$PDF_FILE" -quality 90 "$JPEG_OUTPUT_FILE"
 echo "✅ JPG version written to $JPEG_OUTPUT_FILE"
 
-# ─── 7. Cleanup temporary LaTeX files ─────────────────────────────────────────
+# ─── 8. Cleanup temporary LaTeX files ─────────────────────────────────────────
 echo "🧹 Cleaning up temporary LaTeX files"
 rm -f "$(dirname "$OUTPUT_FILE")"/*.aux "$(dirname "$OUTPUT_FILE")"/*.log "$(dirname "$OUTPUT_FILE")"/*.out
 rm -f "$(dirname "$OUTPUT_FILE")"/results_table_wrapper.tex
