@@ -8,7 +8,7 @@ A toolkit for constructing and analyzing merge conflict datasets, and training m
 
 Evaluation results 🚀:
 
-| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid ouput | Different resolution to developer |
+| Model | Equivalent<br>to developer | Code normalized<br>equivalent to<br>developer | Raises a<br>conflict | Invalid<br>ouput | Different<br>resolution to<br>developer |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | GPT 4.1 | 44.04% | 54.09% 🥈 | 3.23% | 0% 🥇 | 42.68% |
 | Claude Opus 4 | 43.05% | 49.38% | 17.00% | 8.06% | 25.56% |
@@ -30,8 +30,6 @@ Evaluation results 🚀:
 | Deepseek R1 | 45.66% | 53.60% 🥉 | 8.81% | .50% | 37.09% |
 | Ours | 48.76% 🥈 | 58.93% 🥇 | 0.12% | 0% 🥇 | 40.95% |
 | Best Distilled Model | 17.99% | 23.70% | 42.56% | 1.74% | 32.00% |
-
-
 
 ## Table of Contents
 
