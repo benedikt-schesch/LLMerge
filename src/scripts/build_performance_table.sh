@@ -100,6 +100,7 @@ declare -a correct_scores
 declare -a semantic_scores
 declare -a raise_scores
 declare -a invalid_scores
+declare -a different_scores
 
 # Process only whitelisted models
 for model in "${MODELS[@]}"; do
@@ -136,9 +137,13 @@ for model in "${MODELS[@]}"; do
         correct_scores+=("${correct:-0}")
         semantic_scores+=("${semantic:-0}")
         raise_scores+=("${raise:-0}")
-        # Calculate and store the "Invalid Java markdown" score
+
+        # Calculate and store derived scores
         invalid_score=$(echo "100 - ${valid:-0}" | bc)
         invalid_scores+=("${invalid_score}")
+
+        different_score=$(echo "100 - (${semantic:-0} + ${raise:-0} + ${invalid_score})" | bc)
+        different_scores+=("${different_score}")
     else
         echo "⚠️ Logfile for model $model not found, skipping"
     fi
@@ -160,9 +165,13 @@ if [[ -f "$SFT_MD" ]]; then
       correct_scores+=("${correct:-0}")
       semantic_scores+=("${semantic:-0}")
       raise_scores+=("${raise:-0}")
-      # Calculate and store the "Invalid Java markdown" score for SFT
+
+      # Calculate and store derived scores for SFT
       invalid_score=$(echo "100 - ${valid:-0}" | bc)
       invalid_scores+=("${invalid_score}")
+
+      different_score=$(echo "100 - (${semantic:-0} + ${raise:-0} + ${invalid_score})" | bc)
+      different_scores+=("${different_score}")
       echo "✅ Added Best SFT model data"
     fi
 fi
@@ -220,25 +229,26 @@ echo "🏆 Identifying top scores for each column..."
 read -r correct_1st correct_2nd correct_3rd < <(get_ranked_scores "-nr" "${correct_scores[@]}")
 read -r semantic_1st semantic_2nd semantic_3rd < <(get_ranked_scores "-nr" "${semantic_scores[@]}")
 read -r raise_1st raise_2nd raise_3rd < <(get_ranked_scores "-nr" "${raise_scores[@]}")
-# For invalid markdown, lower is better, so we sort ascending (-n)
+# For these columns, lower is better, so we sort ascending (-n)
 read -r invalid_1st invalid_2nd invalid_3rd < <(get_ranked_scores "-n" "${invalid_scores[@]}")
+read -r different_1st different_2nd different_3rd < <(get_ranked_scores "-n" "${different_scores[@]}")
 
 
 # Write LaTeX table header
 cat << 'EOF' > "$OUTPUT_FILE"
 \begin{table*}[ht]
 \centering
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrrrr}
 \toprule
-Model & Equivalent to developer & Code normalized equivalent to developer & Raises a conflict & Invalid Java markdown \\
+Model & Equivalent to developer & Code normalized equivalent to developer & Raises a conflict & Invalid Java markdown & Different resolution to developer \\
 \midrule
 EOF
 
 # Write Markdown table header
 MD_OUTPUT_FILE="tables/results_table.md"
 mkdir -p "$(dirname "$MD_OUTPUT_FILE")"
-echo "| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid Java markdown |" > "$MD_OUTPUT_FILE"
-echo "| --- | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
+echo "| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid Java markdown | Different resolution to developer |" > "$MD_OUTPUT_FILE"
+echo "| --- | ---: | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
 
 # Iterate through collected data and write table rows with per-cell formatting
 echo "📝 Building LaTeX and Markdown tables with per-column rankings..."
@@ -250,16 +260,18 @@ for i in "${!display_names[@]}"; do
     semantic_tex=$(format_cell "${semantic_scores[i]}" "$semantic_1st" "$semantic_2nd" "$semantic_3rd" "latex")
     raise_tex=$(format_cell "${raise_scores[i]}" "$raise_1st" "$raise_2nd" "$raise_3rd" "latex")
     invalid_tex=$(format_cell "${invalid_scores[i]}" "$invalid_1st" "$invalid_2nd" "$invalid_3rd" "latex")
+    different_tex=$(format_cell "${different_scores[i]}" "$different_1st" "$different_2nd" "$different_3rd" "latex")
 
     # Format each cell for Markdown output
     correct_md=$(format_cell "${correct_scores[i]}" "$correct_1st" "$correct_2nd" "$correct_3rd" "md")
     semantic_md=$(format_cell "${semantic_scores[i]}" "$semantic_1st" "$semantic_2nd" "$semantic_3rd" "md")
     raise_md=$(format_cell "${raise_scores[i]}" "$raise_1st" "$raise_2nd" "$raise_3rd" "md")
     invalid_md=$(format_cell "${invalid_scores[i]}" "$invalid_1st" "$invalid_2nd" "$invalid_3rd" "md")
+    different_md=$(format_cell "${different_scores[i]}" "$different_1st" "$different_2nd" "$different_3rd" "md")
 
     # Write the formatted rows to the output files
-    echo "${display_model} & ${correct_tex} & ${semantic_tex} & ${raise_tex} & ${invalid_tex} \\\\" >> "$OUTPUT_FILE"
-    echo "| ${display_model} | ${correct_md} | ${semantic_md} | ${raise_md} | ${invalid_md} |" >> "$MD_OUTPUT_FILE"
+    echo "${display_model} & ${correct_tex} & ${semantic_tex} & ${raise_tex} & ${invalid_tex} & ${different_tex} \\\\" >> "$OUTPUT_FILE"
+    echo "| ${display_model} | ${correct_md} | ${semantic_md} | ${raise_md} | ${invalid_md} | ${different_md} |" >> "$MD_OUTPUT_FILE"
 done
 echo "✅ Finished building tables."
 
@@ -267,7 +279,7 @@ echo "✅ Finished building tables."
 cat << 'EOF' >> "$OUTPUT_FILE"
 \bottomrule
 \end{tabular}
-\caption{Merge-resolution performance across models. Top three results in each column are highlighted by color: \textcolor{ForestGreen}{1st place}, \textcolor{RoyalBlue}{2nd place}, and \textcolor{BurntOrange}{3rd place}. For the 'Invalid Java markdown' column, lower scores are better.}
+\caption{Merge-resolution performance across models. Top three results in each column are highlighted by color: \textcolor{ForestGreen}{1st place}, \textcolor{RoyalBlue}{2nd place}, and \textcolor{BurntOrange}{3rd place}.}
 \end{table*}
 EOF
 
