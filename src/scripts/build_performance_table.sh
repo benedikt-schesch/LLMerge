@@ -20,7 +20,8 @@ ROOT_DIR="eval_outputs/repos_reaper_test/test"
 # Only these models will be processed
 MODELS=(
     "openai/gpt-4.1"
-    "anthropic/claude-3.7-sonnet"
+    "anthropic/claude-opus-4"
+    "anthropic/claude-sonnet-4"
     "meta-llama/llama-4-maverick"
     "meta-llama/llama-3.3-70b-instruct"
     "google/gemini-2.5-pro-preview"
@@ -92,27 +93,19 @@ fi
 echo # Blank line for readability
 
 
-# ─── 4. Start the LaTeX table ────────────────────────────────────────────────
-cat << 'EOF' > "$OUTPUT_FILE"
-\begin{table}[ht]
-\centering
-\begin{tabular}{lrrrr}
-\toprule
-Model & Correct merges & Semantic merges & Raising conflict & Valid Java markdown \\
-\midrule
-EOF
-
-echo "📝 Building LaTeX table from eval.log files in $ROOT_DIR"
-MD_OUTPUT_FILE="tables/results_table.md"
-mkdir -p "$(dirname "$MD_OUTPUT_FILE")"
-echo "| Model | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |" > "$MD_OUTPUT_FILE"
-echo "| --- | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
+# ─── 4. Gather data before building tables ────────────────────────────────────
+echo "📊 Gathering data from eval.log files in $ROOT_DIR"
+# Use parallel arrays to store model data before printing
+declare -a display_names
+declare -a correct_scores
+declare -a semantic_scores
+declare -a raise_scores
+declare -a valid_scores
 
 # Process only whitelisted models
 for model in "${MODELS[@]}"; do
     logfile="$ROOT_DIR/$model/eval.log"
     if [[ -f "$logfile" ]]; then
-        echo "⚙️ Processing $logfile"
         # extract the last-occurring values for each metric
         read valid raise semantic correct < <(
             awk '
@@ -123,7 +116,7 @@ for model in "${MODELS[@]}"; do
                 END { print v, r, s, c }
             ' "$logfile"
         )
-        # Format model name: strip prefix, handle special cases for GPT and o3
+        # Format model name
         name="${model##*/}"
         if [[ "$name" == "o3" ]]; then
             display_model="$name"
@@ -136,56 +129,140 @@ for model in "${MODELS[@]}"; do
             display_model="GPT ${rest}"
         else
             display_model=$(echo "$name" | sed 's/-/ /g; s/\b\(.\)/\u\1/g')
-            # Capitalize 'b' suffix for billions
             display_model=$(echo "$display_model" | sed -r 's/([0-9]+(\.[0-9]+)?)b/\1B/g')
         fi
-        # print one row
-        echo "${display_model} & ${correct}\\% & ${semantic}\\% & ${raise}\\% & ${valid}\\% \\\\" >> "$OUTPUT_FILE"
-        echo "✅ Added $model to table"
-        echo "| ${display_model} | ${correct}% | ${semantic}% | ${raise}% | ${valid}% |" >> "$MD_OUTPUT_FILE"
+
+        # Store data in arrays, providing a default of 0 if a value is missing
+        display_names+=("$display_model")
+        correct_scores+=("${correct:-0}")
+        semantic_scores+=("${semantic:-0}")
+        raise_scores+=("${raise:-0}")
+        valid_scores+=("${valid:-0}")
     else
         echo "⚠️ Logfile for model $model not found, skipping"
     fi
 done
 
-echo "📝 Finished processing all eval.log files"
-# ─── 5. Include best SFT model if available ──────────────────────────────────
+# Include best SFT model if available
 SFT_MD="tables/results_table_sft.md"
 if [[ -f "$SFT_MD" ]]; then
     echo "⚙️ Processing best SFT model from $SFT_MD"
-    # skip header (2 lines), sort by 5th column (Correct merges), pick top
     best_line=$(tail -n +3 "$SFT_MD" | sort -t '|' -k5 -nr | head -n1)
-    # split on '|' into fields (ignore leading/trailing empties)
-    IFS='|' read -r _ epochs lr decay sched correct semantic raise valid _ <<< "$best_line"
-    # strip trailing % signs
-    correct=${correct//%/}
-    semantic=${semantic//%/}
-    raise=${raise//%/}
-    valid=${valid//%/}
-    display_model="Best SFT model"
-    # append to LaTeX table
-    echo "${display_model} & ${correct}\\% & ${semantic}\\% & ${raise}\\% & ${valid}\\% \\\\" >> "$OUTPUT_FILE"
-    # append to markdown table
-    echo "| ${display_model} | ${correct}% | ${semantic}% | ${raise}% | ${valid}% |" >> "$MD_OUTPUT_FILE"
-    echo "✅ Added Best SFT model to table"
+    if [[ -n "$best_line" ]]; then
+      IFS='|' read -r _ epochs lr decay sched correct semantic raise valid _ <<< "$best_line"
+      correct=$(echo "${correct//%/}" | xargs)
+      semantic=$(echo "${semantic//%/}" | xargs)
+      raise=$(echo "${raise//%/}" | xargs)
+      valid=$(echo "${valid//%/}" | xargs)
+
+      display_names+=("Best SFT model")
+      correct_scores+=("${correct:-0}")
+      semantic_scores+=("${semantic:-0}")
+      raise_scores+=("${raise:-0}")
+      valid_scores+=("${valid:-0}")
+      echo "✅ Added Best SFT model data"
+    fi
 fi
+
+# ─── 5. Find top scores per column and write tables ───────────────────────────
+
+# Helper function to find the top three unique scores from an array of numbers
+get_top_three_scores() {
+    local -a scores=("$@")
+    local -a unique_sorted=()
+    if [ ${#scores[@]} -gt 0 ]; then
+        unique_sorted=($(printf "%s\n" "${scores[@]}" | sort -nr | uniq))
+    fi
+    # Output space-separated list of top 3 scores. Default to -1 (an unmatchable value).
+    echo "${unique_sorted[0]:--1} ${unique_sorted[1]:--1} ${unique_sorted[2]:--1}"
+}
+
+# Helper function to format a table cell based on its rank
+format_cell() {
+    local value="$1"
+    local s1="$2" local s2="$3" local s3="$4"
+    local format_type="$5" # "latex" or "md"
+    local suffix=""
+    [[ "$format_type" == "latex" ]] && suffix="\\%" || suffix="%"
+
+    if (( $(echo "$value == $s1" | bc -l) && $(echo "$s1 != -1" | bc -l) )); then
+        # 1st place: Green
+        if [[ "$format_type" == "latex" ]]; then echo "\\textcolor{ForestGreen}{${value}${suffix}}"; else echo "<span style=\"color:#228B22;\">${value}${suffix}</span>"; fi
+    elif (( $(echo "$value == $s2" | bc -l) && $(echo "$s2 != -1" | bc -l) )); then
+        # 2nd place: Blue
+        if [[ "$format_type" == "latex" ]]; then echo "\\textcolor{RoyalBlue}{${value}${suffix}}"; else echo "<span style=\"color:#4169E1;\">${value}${suffix}</span>"; fi
+    elif (( $(echo "$value == $s3" | bc -l) && $(echo "$s3 != -1" | bc -l) )); then
+        # 3rd place: Orange-Brown
+        if [[ "$format_type" == "latex" ]]; then echo "\\textcolor{BurntOrange}{${value}${suffix}}"; else echo "<span style=\"color:#D2691E;\">${value}${suffix}</span>"; fi
+    else
+        echo "${value}${suffix}"
+    fi
+}
+
+# Find top three scores for EACH column independently
+echo "🏆 Identifying top scores for each column..."
+read -r correct_1st correct_2nd correct_3rd < <(get_top_three_scores "${correct_scores[@]}")
+read -r semantic_1st semantic_2nd semantic_3rd < <(get_top_three_scores "${semantic_scores[@]}")
+read -r raise_1st raise_2nd raise_3rd < <(get_top_three_scores "${raise_scores[@]}")
+read -r valid_1st valid_2nd valid_3rd < <(get_top_three_scores "${valid_scores[@]}")
+
+# Write LaTeX table header
+cat << 'EOF' > "$OUTPUT_FILE"
+\begin{table}[ht]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Model & Correct merges & Semantic merges & Raising conflict & Valid Java markdown \\
+\midrule
+EOF
+
+# Write Markdown table header
+MD_OUTPUT_FILE="tables/results_table.md"
+mkdir -p "$(dirname "$MD_OUTPUT_FILE")"
+echo "| Model | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |" > "$MD_OUTPUT_FILE"
+echo "| --- | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
+
+# Iterate through collected data and write table rows with per-cell formatting
+echo "📝 Building LaTeX and Markdown tables with per-column rankings..."
+for i in "${!display_names[@]}"; do
+    display_model="${display_names[i]}"
+
+    # Format each cell for LaTeX output
+    correct_tex=$(format_cell "${correct_scores[i]}" "$correct_1st" "$correct_2nd" "$correct_3rd" "latex")
+    semantic_tex=$(format_cell "${semantic_scores[i]}" "$semantic_1st" "$semantic_2nd" "$semantic_3rd" "latex")
+    raise_tex=$(format_cell "${raise_scores[i]}" "$raise_1st" "$raise_2nd" "$raise_3rd" "latex")
+    valid_tex=$(format_cell "${valid_scores[i]}" "$valid_1st" "$valid_2nd" "$valid_3rd" "latex")
+
+    # Format each cell for Markdown output
+    correct_md=$(format_cell "${correct_scores[i]}" "$correct_1st" "$correct_2nd" "$correct_3rd" "md")
+    semantic_md=$(format_cell "${semantic_scores[i]}" "$semantic_1st" "$semantic_2nd" "$semantic_3rd" "md")
+    raise_md=$(format_cell "${raise_scores[i]}" "$raise_1st" "$raise_2nd" "$raise_3rd" "md")
+    valid_md=$(format_cell "${valid_scores[i]}" "$valid_1st" "$valid_2nd" "$valid_3rd" "md")
+
+    # Write the formatted rows to the output files
+    echo "${display_model} & ${correct_tex} & ${semantic_tex} & ${raise_tex} & ${valid_tex} \\\\" >> "$OUTPUT_FILE"
+    echo "| ${display_model} | ${correct_md} | ${semantic_md} | ${raise_md} | ${valid_md} |" >> "$MD_OUTPUT_FILE"
+done
+echo "✅ Finished building tables."
 
 # ─── 6. Close out the table ───────────────────────────────────────────────────
 cat << 'EOF' >> "$OUTPUT_FILE"
 \bottomrule
 \end{tabular}
-\caption{Merge-resolution performance across models.}
+\caption{Merge-resolution performance across models. Top three results in each column are highlighted by color: \textcolor{ForestGreen}{1st place}, \textcolor{RoyalBlue}{2nd place}, and \textcolor{BurntOrange}{3rd place}.}
 \end{table}
 EOF
 
 # ─── 7. Generate JPEG version of the table ───────────────────────────────────
 JPEG_OUTPUT_FILE="$(dirname "$OUTPUT_FILE")/results_table.jpg"
 TEX_WRAPPER="$(dirname "$OUTPUT_FILE")/results_table_wrapper.tex"
+# Added [dvipsnames]{xcolor} for more color options (ForestGreen, etc.)
 cat << LATEX > "$TEX_WRAPPER"
 \documentclass{article}
 \usepackage[margin=5mm]{geometry}
 \usepackage{booktabs}
 \usepackage{pdflscape}
+\usepackage[dvipsnames]{xcolor}
 \pagestyle{empty}
 \begin{document}
 \begin{landscape}
@@ -194,7 +271,11 @@ cat << LATEX > "$TEX_WRAPPER"
 \end{document}
 LATEX
 echo "🖨 Generating PDF version of the table for JPEG conversion"
-pdflatex -output-directory "$(dirname "$OUTPUT_FILE")" "$TEX_WRAPPER"
+
+# Print the command before executing it
+echo "  ↳ Executing: pdflatex -output-directory \"$(dirname "$OUTPUT_FILE")\" \"$TEX_WRAPPER\""
+
+pdflatex -output-directory "$(dirname "$OUTPUT_FILE")" "$TEX_WRAPPER" > /dev/null
 PDF_FILE="$(dirname "$OUTPUT_FILE")/results_table_wrapper.pdf"
 convert -density 300 "$PDF_FILE" -quality 90 "$JPEG_OUTPUT_FILE"
 echo "✅ JPG version written to $JPEG_OUTPUT_FILE"
