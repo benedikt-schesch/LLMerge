@@ -29,7 +29,6 @@ MODELS=(
     "x-ai/grok-3-beta"
     "qwen/qwq-32b"
     "o3"
-    # "qwen/qwen3-8b"
     "qwen/qwen3-14b"
     "qwen/qwen3-32b"
     "deepseek/deepseek-r1-distill-qwen-1.5b"
@@ -177,27 +176,37 @@ get_top_three_scores() {
     echo "${unique_sorted[0]:--1} ${unique_sorted[1]:--1} ${unique_sorted[2]:--1}"
 }
 
+# ⭐️⭐️⭐️ MODIFIED FUNCTION START ⭐️⭐️⭐️
 # Helper function to format a table cell based on its rank
 format_cell() {
     local value="$1"
     local s1="$2" local s2="$3" local s3="$4"
     local format_type="$5" # "latex" or "md"
-    local suffix=""
-    [[ "$format_type" == "latex" ]] && suffix="\\%" || suffix="%"
 
-    if (( $(echo "$value == $s1" | bc -l) && $(echo "$s1 != -1" | bc -l) )); then
-        # 1st place: Green
-        if [[ "$format_type" == "latex" ]]; then echo "\\textcolor{ForestGreen}{${value}${suffix}}"; else echo "<span style=\"color:#228B22;\">${value}${suffix}</span>"; fi
-    elif (( $(echo "$value == $s2" | bc -l) && $(echo "$s2 != -1" | bc -l) )); then
-        # 2nd place: Blue
-        if [[ "$format_type" == "latex" ]]; then echo "\\textcolor{RoyalBlue}{${value}${suffix}}"; else echo "<span style=\"color:#4169E1;\">${value}${suffix}</span>"; fi
-    elif (( $(echo "$value == $s3" | bc -l) && $(echo "$s3 != -1" | bc -l) )); then
-        # 3rd place: Orange-Brown
-        if [[ "$format_type" == "latex" ]]; then echo "\\textcolor{BurntOrange}{${value}${suffix}}"; else echo "<span style=\"color:#D2691E;\">${value}${suffix}</span>"; fi
-    else
-        echo "${value}${suffix}"
+    if [[ "$format_type" == "latex" ]]; then
+        local suffix="\\%"
+        if (( $(echo "$value == $s1" | bc -l) && $(echo "$s1 != -1" | bc -l) )); then
+            echo "\\textcolor{ForestGreen}{${value}${suffix}}" # 1st place
+        elif (( $(echo "$value == $s2" | bc -l) && $(echo "$s2 != -1" | bc -l) )); then
+            echo "\\textcolor{RoyalBlue}{${value}${suffix}}" # 2nd place
+        elif (( $(echo "$value == $s3" | bc -l) && $(echo "$s3 != -1" | bc -l) )); then
+            echo "\\textcolor{BurntOrange}{${value}${suffix}}" # 3rd place
+        else
+            echo "${value}${suffix}"
+        fi
+    else # Markdown formatting for GitHub
+        local output="${value}%"
+        if (( $(echo "$value == $s1" | bc -l) && $(echo "$s1 != -1" | bc -l) )); then
+            output+=" 🥇" # 1st place
+        elif (( $(echo "$value == $s2" | bc -l) && $(echo "$s2 != -1" | bc -l) )); then
+            output+=" 🥈" # 2nd place
+        elif (( $(echo "$value == $s3" | bc -l) && $(echo "$s3 != -1" | bc -l) )); then
+            output+=" 🥉" # 3rd place
+        fi
+        echo "$output"
     fi
 }
+# ⭐️⭐️⭐️ MODIFIED FUNCTION END ⭐️⭐️⭐️
 
 # Find top three scores for EACH column independently
 echo "🏆 Identifying top scores for each column..."
