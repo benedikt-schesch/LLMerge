@@ -99,7 +99,7 @@ declare -a display_names
 declare -a correct_scores
 declare -a semantic_scores
 declare -a raise_scores
-declare -a valid_scores
+declare -a invalid_scores
 
 # Process only whitelisted models
 for model in "${MODELS[@]}"; do
@@ -136,7 +136,9 @@ for model in "${MODELS[@]}"; do
         correct_scores+=("${correct:-0}")
         semantic_scores+=("${semantic:-0}")
         raise_scores+=("${raise:-0}")
-        valid_scores+=("${valid:-0}")
+        # Calculate and store the "Invalid Java markdown" score
+        invalid_score=$(echo "100 - ${valid:-0}" | bc)
+        invalid_scores+=("${invalid_score}")
     else
         echo "⚠️ Logfile for model $model not found, skipping"
     fi
@@ -158,7 +160,9 @@ if [[ -f "$SFT_MD" ]]; then
       correct_scores+=("${correct:-0}")
       semantic_scores+=("${semantic:-0}")
       raise_scores+=("${raise:-0}")
-      valid_scores+=("${valid:-0}")
+      # Calculate and store the "Invalid Java markdown" score for SFT
+      invalid_score=$(echo "100 - ${valid:-0}" | bc)
+      invalid_scores+=("${invalid_score}")
       echo "✅ Added Best SFT model data"
     fi
 fi
@@ -166,15 +170,19 @@ fi
 # ─── 5. Find top scores per column and write tables ───────────────────────────
 
 # Helper function to find the top three unique scores from an array of numbers
-get_top_three_scores() {
+# Takes a sort flag (e.g., "-nr" for descending, "-n" for ascending) as the first argument
+get_ranked_scores() {
+    local sort_flag="$1"
+    shift
     local -a scores=("$@")
     local -a unique_sorted=()
     if [ ${#scores[@]} -gt 0 ]; then
-        unique_sorted=($(printf "%s\n" "${scores[@]}" | sort -nr | uniq))
+        unique_sorted=($(printf "%s\n" "${scores[@]}" | sort "$sort_flag" | uniq))
     fi
     # Output space-separated list of top 3 scores. Default to -1 (an unmatchable value).
     echo "${unique_sorted[0]:--1} ${unique_sorted[1]:--1} ${unique_sorted[2]:--1}"
 }
+
 
 # Helper function to format a table cell based on its rank
 format_cell() {
@@ -208,10 +216,13 @@ format_cell() {
 
 # Find top three scores for EACH column independently
 echo "🏆 Identifying top scores for each column..."
-read -r correct_1st correct_2nd correct_3rd < <(get_top_three_scores "${correct_scores[@]}")
-read -r semantic_1st semantic_2nd semantic_3rd < <(get_top_three_scores "${semantic_scores[@]}")
-read -r raise_1st raise_2nd raise_3rd < <(get_top_three_scores "${raise_scores[@]}")
-read -r valid_1st valid_2nd valid_3rd < <(get_top_three_scores "${valid_scores[@]}")
+# For these columns, higher is better, so we sort descending (-nr)
+read -r correct_1st correct_2nd correct_3rd < <(get_ranked_scores "-nr" "${correct_scores[@]}")
+read -r semantic_1st semantic_2nd semantic_3rd < <(get_ranked_scores "-nr" "${semantic_scores[@]}")
+read -r raise_1st raise_2nd raise_3rd < <(get_ranked_scores "-nr" "${raise_scores[@]}")
+# For invalid markdown, lower is better, so we sort ascending (-n)
+read -r invalid_1st invalid_2nd invalid_3rd < <(get_ranked_scores "-n" "${invalid_scores[@]}")
+
 
 # Write LaTeX table header
 cat << 'EOF' > "$OUTPUT_FILE"
@@ -219,14 +230,14 @@ cat << 'EOF' > "$OUTPUT_FILE"
 \centering
 \begin{tabular}{lrrrr}
 \toprule
-Model & Correct merges & Semantic merges & Raising conflict & Valid Java markdown \\
+Model & Equivalent to developer & Code normalized equivalent to developer & Raises a conflict & Invalid Java markdown \\
 \midrule
 EOF
 
 # Write Markdown table header
 MD_OUTPUT_FILE="tables/results_table.md"
 mkdir -p "$(dirname "$MD_OUTPUT_FILE")"
-echo "| Model | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |" > "$MD_OUTPUT_FILE"
+echo "| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid Java markdown |" > "$MD_OUTPUT_FILE"
 echo "| --- | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
 
 # Iterate through collected data and write table rows with per-cell formatting
@@ -238,17 +249,17 @@ for i in "${!display_names[@]}"; do
     correct_tex=$(format_cell "${correct_scores[i]}" "$correct_1st" "$correct_2nd" "$correct_3rd" "latex")
     semantic_tex=$(format_cell "${semantic_scores[i]}" "$semantic_1st" "$semantic_2nd" "$semantic_3rd" "latex")
     raise_tex=$(format_cell "${raise_scores[i]}" "$raise_1st" "$raise_2nd" "$raise_3rd" "latex")
-    valid_tex=$(format_cell "${valid_scores[i]}" "$valid_1st" "$valid_2nd" "$valid_3rd" "latex")
+    invalid_tex=$(format_cell "${invalid_scores[i]}" "$invalid_1st" "$invalid_2nd" "$invalid_3rd" "latex")
 
     # Format each cell for Markdown output
     correct_md=$(format_cell "${correct_scores[i]}" "$correct_1st" "$correct_2nd" "$correct_3rd" "md")
     semantic_md=$(format_cell "${semantic_scores[i]}" "$semantic_1st" "$semantic_2nd" "$semantic_3rd" "md")
     raise_md=$(format_cell "${raise_scores[i]}" "$raise_1st" "$raise_2nd" "$raise_3rd" "md")
-    valid_md=$(format_cell "${valid_scores[i]}" "$valid_1st" "$valid_2nd" "$valid_3rd" "md")
+    invalid_md=$(format_cell "${invalid_scores[i]}" "$invalid_1st" "$invalid_2nd" "$invalid_3rd" "md")
 
     # Write the formatted rows to the output files
-    echo "${display_model} & ${correct_tex} & ${semantic_tex} & ${raise_tex} & ${valid_tex} \\\\" >> "$OUTPUT_FILE"
-    echo "| ${display_model} | ${correct_md} | ${semantic_md} | ${raise_md} | ${valid_md} |" >> "$MD_OUTPUT_FILE"
+    echo "${display_model} & ${correct_tex} & ${semantic_tex} & ${raise_tex} & ${invalid_tex} \\\\" >> "$OUTPUT_FILE"
+    echo "| ${display_model} | ${correct_md} | ${semantic_md} | ${raise_md} | ${invalid_md} |" >> "$MD_OUTPUT_FILE"
 done
 echo "✅ Finished building tables."
 
@@ -256,7 +267,7 @@ echo "✅ Finished building tables."
 cat << 'EOF' >> "$OUTPUT_FILE"
 \bottomrule
 \end{tabular}
-\caption{Merge-resolution performance across models. Top three results in each column are highlighted by color: \textcolor{ForestGreen}{1st place}, \textcolor{RoyalBlue}{2nd place}, and \textcolor{BurntOrange}{3rd place}.}
+\caption{Merge-resolution performance across models. Top three results in each column are highlighted by color: \textcolor{ForestGreen}{1st place}, \textcolor{RoyalBlue}{2nd place}, and \textcolor{BurntOrange}{3rd place}. For the 'Invalid Java markdown' column, lower scores are better.}
 \end{table*}
 EOF
 
