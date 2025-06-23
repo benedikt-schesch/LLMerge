@@ -13,6 +13,7 @@ import argparse
 from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
+import pandas as pd
 from tqdm import tqdm
 from loguru import logger
 import unsloth
@@ -201,6 +202,7 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     count_conflict_preserved = 0
     count_resolved_perfectly = 0
     count_resolved_semantically = 0
+    results_data = []
 
     # Loop over the examples in the dataset.
     # Pre-generate full completions in parallel for remote models
@@ -263,11 +265,13 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         answers = [example["answer"]]  # type: ignore
 
         # Evaluate the thinking format.
-        if format_reward(completions, log_wandb=False)[0] > 0:
+        has_valid_thinking = format_reward(completions, log_wandb=False)[0] > 0
+        if has_valid_thinking:
             count_thinking += 1
 
         # Evaluate the Java markdown formatting.
-        if java_markdown_reward(completions, log_wandb=False)[0] > 0:
+        has_valid_java_md = java_markdown_reward(completions, log_wandb=False)[0] > 0
+        if has_valid_java_md:
             count_java_md += 1
 
         reward = merged_conflict_reward(prompts, completions, answers, log_wandb=False)[
@@ -275,18 +279,35 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         ]
 
         # If the model raises a conflict
-        if reward == 0.1:
+        conflict_preserved = reward == 0.1
+        if conflict_preserved:
             count_conflict_preserved += 1
 
         # If the model resolves the conflict semantically
-        if reward >= 0.5:
+        semantically_resolved = reward >= 0.5
+        if semantically_resolved:
             logger.info(f"Semantically resolved {idx}.")
             count_resolved_semantically += 1
 
         # If the model resolves the conflict perfectly
-        if reward == 1.0:
+        perfectly_resolved = reward == 1.0
+        if perfectly_resolved:
             logger.info(f"Resolved {idx}.")
             count_resolved_perfectly += 1
+
+        # Store individual result for CSV export
+        results_data.append(
+            {
+                "model": args.model_name,
+                "index": idx,
+                "has_valid_thinking": has_valid_thinking,
+                "has_valid_java_md": has_valid_java_md,
+                "conflict_preserved": conflict_preserved,
+                "semantically_resolved": semantically_resolved,
+                "perfectly_resolved": perfectly_resolved,
+                "reward_score": reward,
+            }
+        )
 
         # Update progress bar with current percentages.
         pbar.set_postfix(
@@ -304,6 +325,12 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
     pct_resolved_semantic = (
         100 * count_resolved_semantically / total if total > 0 else 0
     )
+
+    # Save individual results to a CSV file
+    results_df = pd.DataFrame(results_data)
+    csv_output_path = output_dir / "evaluation_results.csv"
+    results_df.to_csv(csv_output_path, index=False)
+    logger.info(f"Individual results saved to {csv_output_path}")
 
     logger.success("Evaluation Results:")
     logger.success(f"Total merges evaluated: {total}")
