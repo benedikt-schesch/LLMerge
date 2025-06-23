@@ -240,7 +240,7 @@ cat << 'EOF' > "$OUTPUT_FILE"
 \centering
 \begin{tabular}{lrrrrr}
 \toprule
-Model & Equivalent to developer & Code normalized equivalent to developer & Raises a conflict & Invalid Java markdown & Different resolution to developer \\
+Model & Equivalent to developer & Code normalized equivalent to developer & Raises a conflict & Invalid output & Different resolution to developer \\
 \midrule
 EOF
 
