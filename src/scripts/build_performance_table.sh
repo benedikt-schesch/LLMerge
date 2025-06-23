@@ -247,7 +247,7 @@ EOF
 # Write Markdown table header
 MD_OUTPUT_FILE="tables/results_table.md"
 mkdir -p "$(dirname "$MD_OUTPUT_FILE")"
-echo "| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid Java markdown | Different resolution to developer |" > "$MD_OUTPUT_FILE"
+echo "| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid ouput | Different resolution to developer |" > "$MD_OUTPUT_FILE"
 echo "| --- | ---: | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
 
 # Iterate through collected data and write table rows with per-cell formatting
