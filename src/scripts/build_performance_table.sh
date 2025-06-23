@@ -176,7 +176,6 @@ get_top_three_scores() {
     echo "${unique_sorted[0]:--1} ${unique_sorted[1]:--1} ${unique_sorted[2]:--1}"
 }
 
-# ⭐️⭐️⭐️ MODIFIED FUNCTION START ⭐️⭐️⭐️
 # Helper function to format a table cell based on its rank
 format_cell() {
     local value="$1"
@@ -206,7 +205,6 @@ format_cell() {
         echo "$output"
     fi
 }
-# ⭐️⭐️⭐️ MODIFIED FUNCTION END ⭐️⭐️⭐️
 
 # Find top three scores for EACH column independently
 echo "🏆 Identifying top scores for each column..."
@@ -217,7 +215,7 @@ read -r valid_1st valid_2nd valid_3rd < <(get_top_three_scores "${valid_scores[@
 
 # Write LaTeX table header
 cat << 'EOF' > "$OUTPUT_FILE"
-\begin{table}[ht]
+\begin{table*}[ht]
 \centering
 \begin{tabular}{lrrrr}
 \toprule
@@ -259,7 +257,7 @@ cat << 'EOF' >> "$OUTPUT_FILE"
 \bottomrule
 \end{tabular}
 \caption{Merge-resolution performance across models. Top three results in each column are highlighted by color: \textcolor{ForestGreen}{1st place}, \textcolor{RoyalBlue}{2nd place}, and \textcolor{BurntOrange}{3rd place}.}
-\end{table}
+\end{table*}
 EOF
 
 # ─── 7. Generate JPEG version of the table ───────────────────────────────────
