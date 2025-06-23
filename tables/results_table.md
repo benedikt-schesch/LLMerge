@@ -1,4 +1,4 @@
-| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid ouput | Different resolution to developer |
+| Model | Equivalent<br>to developer | Code normalized<br>equivalent to<br>developer | Raises a<br>conflict | Invalid<br>ouput | Different<br>resolution to<br>developer |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | GPT 4.1 | 44.04% | 54.09% 🥈 | 3.23% | 0% 🥇 | 42.68% |
 | Claude Opus 4 | 43.05% | 49.38% | 17.00% | 8.06% | 25.56% |

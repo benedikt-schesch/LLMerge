@@ -234,21 +234,23 @@ read -r invalid_1st invalid_2nd invalid_3rd < <(get_ranked_scores "-n" "${invali
 read -r different_1st different_2nd different_3rd < <(get_ranked_scores "-n" "${different_scores[@]}")
 
 
+
 # Write LaTeX table header
 cat << 'EOF' > "$OUTPUT_FILE"
 \begin{table*}[ht]
 \centering
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lccccc}
 \toprule
-Model & Equivalent to developer & Code normalized equivalent to developer & Raises a conflict & Invalid output & Different resolution to developer \\
+\thead{Model} & \thead{Equivalent to\\developer} & \thead{Code normalized\\equivalent to\\developer} & \thead{Raises a\\conflict} & \thead{Invalid\\output} & \thead{Different\\resolution to\\developer} \\
 \midrule
 EOF
 
 # Write Markdown table header
 MD_OUTPUT_FILE="tables/results_table.md"
 mkdir -p "$(dirname "$MD_OUTPUT_FILE")"
-echo "| Model | Equivalent to developer | Code normalized equivalent to developer | Raises a conflict | Invalid ouput | Different resolution to developer |" > "$MD_OUTPUT_FILE"
+echo "| Model | Equivalent<br>to developer | Code normalized<br>equivalent to<br>developer | Raises a<br>conflict | Invalid<br>ouput | Different<br>resolution to<br>developer |" > "$MD_OUTPUT_FILE"
 echo "| --- | ---: | ---: | ---: | ---: | ---: |" >> "$MD_OUTPUT_FILE"
+
 
 # Iterate through collected data and write table rows with per-cell formatting
 echo "📝 Building LaTeX and Markdown tables with per-column rankings..."
@@ -286,6 +288,7 @@ EOF
 # ─── 7. Generate JPEG version of the table ───────────────────────────────────
 JPEG_OUTPUT_FILE="$(dirname "$OUTPUT_FILE")/results_table.jpg"
 TEX_WRAPPER="$(dirname "$OUTPUT_FILE")/results_table_wrapper.tex"
+
 # Added [dvipsnames]{xcolor} for more color options (ForestGreen, etc.)
 cat << LATEX > "$TEX_WRAPPER"
 \documentclass{article}
@@ -293,6 +296,11 @@ cat << LATEX > "$TEX_WRAPPER"
 \usepackage{booktabs}
 \usepackage{pdflscape}
 \usepackage[dvipsnames]{xcolor}
+\usepackage{array} % Required for the \thead command
+
+% Helper command for multi-line table headers
+\newcommand{\thead}[1]{\begin{tabular}{@{}c@{}}#1\end{tabular}}
+
 \pagestyle{empty}
 \begin{document}
 \begin{landscape}
@@ -300,6 +308,7 @@ cat << LATEX > "$TEX_WRAPPER"
 \end{landscape}
 \end{document}
 LATEX
+
 echo "🖨 Generating PDF version of the table for JPEG conversion"
 
 # Print the command before executing it
