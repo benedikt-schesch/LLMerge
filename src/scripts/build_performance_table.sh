@@ -149,10 +149,10 @@ for model in "${MODELS[@]}"; do
     fi
 done
 
-# Include Best distilled model if available
+# Include Best Distilled Model if available
 SFT_MD="tables/results_table_sft.md"
 if [[ -f "$SFT_MD" ]]; then
-    echo "⚙️ Processing Best distilled model from $SFT_MD"
+    echo "⚙️ Processing Best Distilled Model from $SFT_MD"
     best_line=$(tail -n +3 "$SFT_MD" | sort -t '|' -k5 -nr | head -n1)
     if [[ -n "$best_line" ]]; then
       IFS='|' read -r _ epochs lr decay sched correct semantic raise valid _ <<< "$best_line"
@@ -161,7 +161,7 @@ if [[ -f "$SFT_MD" ]]; then
       raise=$(echo "${raise//%/}" | xargs)
       valid=$(echo "${valid//%/}" | xargs)
 
-      display_names+=("Best distilled model")
+      display_names+=("Best Distilled Model")
       correct_scores+=("${correct:-0}")
       semantic_scores+=("${semantic:-0}")
       raise_scores+=("${raise:-0}")
@@ -172,7 +172,7 @@ if [[ -f "$SFT_MD" ]]; then
 
       different_score=$(echo "100 - (${semantic:-0} + ${raise:-0} + ${invalid_score})" | bc)
       different_scores+=("${different_score}")
-      echo "✅ Added Best distilled model data"
+      echo "✅ Added Best Distilled Model data"
     fi
 fi
 
