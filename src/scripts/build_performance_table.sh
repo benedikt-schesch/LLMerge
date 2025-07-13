@@ -115,7 +115,28 @@ for model in "${MODELS[@]}"; do
 done
 
 echo "📝 Finished processing all eval.log files"
-# ─── 5. Close out the table ───────────────────────────────────────────────────
+# ─── 5. Include best SFT model if available ──────────────────────────────────
+SFT_MD="tables/results_table_sft.md"
+if [[ -f "$SFT_MD" ]]; then
+    echo "⚙️ Processing best SFT model from $SFT_MD"
+    # skip header (2 lines), sort by 5th column (Correct merges), pick top
+    best_line=$(tail -n +3 "$SFT_MD" | sort -t '|' -k5 -nr | head -n1)
+    # split on '|' into fields (ignore leading/trailing empties)
+    IFS='|' read -r _ epochs lr decay sched correct semantic raise valid _ <<< "$best_line"
+    # strip trailing % signs
+    correct=${correct//%/}
+    semantic=${semantic//%/}
+    raise=${raise//%/}
+    valid=${valid//%/}
+    display_model="Best SFT model"
+    # append to LaTeX table
+    echo "${display_model} & ${correct}\\% & ${semantic}\\% & ${raise}\\% & ${valid}\\% \\\\" >> "$OUTPUT_FILE"
+    # append to markdown table
+    echo "| ${display_model} | ${correct}% | ${semantic}% | ${raise}% | ${valid}% |" >> "$MD_OUTPUT_FILE"
+    echo "✅ Added Best SFT model to table"
+fi
+
+# ─── 6. Close out the table ───────────────────────────────────────────────────
 cat << 'EOF' >> "$OUTPUT_FILE"
 \bottomrule
 \end{tabular}
@@ -123,7 +144,7 @@ cat << 'EOF' >> "$OUTPUT_FILE"
 \end{table}
 EOF
 
-# ─── 6. Generate JPEG version of the table ───────────────────────────────────
+# ─── 7. Generate JPEG version of the table ───────────────────────────────────
 JPEG_OUTPUT_FILE="$(dirname "$OUTPUT_FILE")/results_table.jpg"
 TEX_WRAPPER="$(dirname "$OUTPUT_FILE")/results_table_wrapper.tex"
 cat << LATEX > "$TEX_WRAPPER"
@@ -144,7 +165,7 @@ PDF_FILE="$(dirname "$OUTPUT_FILE")/results_table_wrapper.pdf"
 convert -density 300 "$PDF_FILE" -quality 90 "$JPEG_OUTPUT_FILE"
 echo "✅ JPG version written to $JPEG_OUTPUT_FILE"
 
-# ─── 7. Cleanup temporary LaTeX files ─────────────────────────────────────────
+# ─── 8. Cleanup temporary LaTeX files ─────────────────────────────────────────
 echo "🧹 Cleaning up temporary LaTeX files"
 rm -f "$(dirname "$OUTPUT_FILE")"/*.aux "$(dirname "$OUTPUT_FILE")"/*.log "$(dirname "$OUTPUT_FILE")"/*.out
 rm -f "$(dirname "$OUTPUT_FILE")"/results_table_wrapper.tex

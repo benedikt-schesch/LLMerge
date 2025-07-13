@@ -28,7 +28,7 @@ Evaluation results 🚀:
 | Deepseek R1 Distill Llama 70B | 25.81% | 33.00% | 29.40% | 98.88% |
 | Deepseek R1 | 45.66% | 53.60% | 8.81% | 99.50% |
 | Ours | 48.76% | 58.93% | 0.12% | 100.00% |
-
+| Best SFT model |  17.99 % |  23.70 % |  42.56 % |  98.26 % |
 
 ## Table of Contents
 
