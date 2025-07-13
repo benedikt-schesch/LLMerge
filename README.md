@@ -1,8 +1,8 @@
 # LLMerge
 
-[![CI](https://github.com/benedikt-schesch/LLMerge/actions/workflows/ci.yml/badge.svg)]
+![CI](https://github.com/benedikt-schesch/LLMerge/actions/workflows/ci.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)]
+![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 
 A toolkit for training Large Language Models to automatically resolve merge conflicts in Java code. 🤖
 
