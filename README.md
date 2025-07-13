@@ -91,7 +91,7 @@ merges/
 
 3. Copy or link the generated dataset to your LLMerge directory:
    ```bash
-   cp -r merges/repos_reaper_1000 /path/to/LLMerge/merges/
+   cp -r merges/repos_reaper_java_train /path/to/LLMerge/merges/
    ```
 
 ### Dataset Format
@@ -120,7 +120,7 @@ python3 train.py --epochs 1500 --learning_rate 5e-5
 Direct supervised fine-tuning on human-resolved conflicts without reasoning:
 
 ```bash
-python3 sft_train.py --dataset merges/repos_reaper_1000/dataset
+python3 sft_train.py --dataset merges/repos_reaper_java_train/dataset
 ```
 
 ### 3. Knowledge Distillation (API-based)
@@ -129,10 +129,10 @@ Train on outputs from DeepSeek R1 API (requires separate data preparation):
 
 ```bash
 # First prepare distillation dataset
-python3 src/deepseek_sft_data.py --dataset_path merges/repos_reaper_1000/dataset
+python3 src/deepseek_sft_data.py --dataset_path merges/repos_reaper_java_train/dataset
 
 # Then train on distilled data
-python3 sft_train.py --dataset merges/repos_reaper_1000/dataset_sft --add_system_prompt
+python3 sft_train.py --dataset merges/repos_reaper_java_train/dataset_sft --add_system_prompt
 ```
 
 ## Evaluation

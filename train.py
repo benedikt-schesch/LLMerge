@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
     print("Loading dataset...")
 
-    dataset = load_from_disk("merges/repos_reaper_1000/dataset")
+    dataset = load_from_disk("merges/repos_reaper_java_train/dataset")
 
     def add_system_prompt(example):
         """Add system prompt to the conversation."""
