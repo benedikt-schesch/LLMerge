@@ -6,7 +6,6 @@ import os
 import re
 import math
 import argparse
-from pathlib import Path
 from typing import List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
@@ -18,6 +17,7 @@ from src.variables import (
     LORA_RANK,
     MAX_OUTPUT_LENGTH,
     MAX_PROMPT_LENGTH,
+    SYSTEM_PROMPT,
 )
 from src.utils import extract_code_block, normalize_java_code
 
@@ -199,7 +199,22 @@ if __name__ == "__main__":
 
     print("Loading dataset...")
 
-    dataset = load_from_disk("merges/repos_reaper_1000/dataset")
+    dataset = load_from_disk("merges/repos_reaper_java_train/dataset")
+
+    def add_system_prompt(example):
+        """Add system prompt to the conversation."""
+        if "prompt" in example and isinstance(example["prompt"], list):
+            # Check if system prompt already exists
+            if not (example["prompt"] and example["prompt"][0].get("role") == "system"):
+                # Add system prompt at the beginning
+                example["prompt"] = [
+                    {"role": "system", "content": SYSTEM_PROMPT}
+                ] + example["prompt"]
+        return example
+
+    # Apply system prompt to the dataset
+    print("Adding system prompts to dataset...")
+    dataset = dataset.map(add_system_prompt)
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
@@ -251,7 +266,7 @@ if __name__ == "__main__":
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
-        output_dir=f"outputs/{MODEL_NAME}",
+        output_dir=f"checkpoints/{MODEL_NAME}",
     )
 
     trainer = GRPOTrainer(
@@ -265,9 +280,3 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train(resume_from_checkpoint=resume)
-    if "outputs" not in model_name:
-        output_dir = Path("outputs") / MODEL_NAME / "grpo_saved_lora"
-    else:
-        output_dir = Path(model_name) / "grpo_saved_lora"
-
-    model.save_lora(output_dir)
