@@ -120,8 +120,14 @@ python3 train.py --epochs 1500 --learning_rate 5e-5
 Direct supervised fine-tuning on human-resolved conflicts without reasoning:
 
 ```bash
+# For DeepSeek model with thinking (original approach)
 python3 sft_train.py --dataset merges/repos_reaper_java_train/dataset
+
+# For Qwen3-14B without thinking (new approach)
+./run_direct_sft_experiments.sh
 ```
+
+See [README_DIRECT_SFT.md](README_DIRECT_SFT.md) for details on the Qwen3 direct SFT approach.
 
 ### 3. Knowledge Distillation (API-based)
 

@@ -33,10 +33,13 @@ def train_sft(
     output_dir: Path = Path("outputs"),
 ):
     """Train a model using Supervised Fine-Tuning."""
+    # Use model name from args or default from variables
+    model_name = getattr(train_args, "model_name", MODEL_NAME)
+
     # Load dataset
     output_dir = (
         output_dir
-        / MODEL_NAME
+        / model_name.replace("/", "_")
         / (
             f"{train_args.run_name}_"
             f"lr{train_args.lr}_"
@@ -49,8 +52,8 @@ def train_sft(
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)
 
-    # Add system prompt if requested
-    if train_args.add_system_prompt:
+    # Add system prompt if requested (skip for no_thinking mode)
+    if train_args.add_system_prompt and not getattr(train_args, "no_thinking", False):
 
         def add_system_prompt(example):
             """Add system prompt to the conversation."""
@@ -67,11 +70,13 @@ def train_sft(
 
         print("Adding system prompts to dataset...")
         dataset = dataset.map(add_system_prompt)
+    elif getattr(train_args, "no_thinking", False):
+        print("No-thinking mode enabled - skipping system prompt")
 
     # Initialize model
-    print(f"Loading model {MODEL_NAME}...")
+    print(f"Loading model {model_name}...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=MODEL_NAME,
+        model_name=model_name,
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
         load_in_4bit=True,
         max_lora_rank=LORA_RANK,
@@ -191,6 +196,17 @@ if __name__ == "__main__":
         type=str,
         default="sft_model",
         help="Name prefix for the training run (e.g., 'distill_model', 'sft_model')",
+    )
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default=None,
+        help="Model name to use (overrides default from variables.py)",
+    )
+    parser.add_argument(
+        "--no_thinking",
+        action="store_true",
+        help="Disable thinking mode for Qwen3 models (direct SFT without reasoning)",
     )
     args = parser.parse_args()
 
