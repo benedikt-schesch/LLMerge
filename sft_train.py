@@ -50,7 +50,7 @@ def train_sft(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Loading dataset from {dataset_path}...")
-    dataset = load_from_disk(dataset_path)
+    dataset = load_from_disk(dataset_path)["train"]
 
     # Add system prompt if requested (skip for no_thinking mode)
     if train_args.add_system_prompt and not getattr(train_args, "no_thinking", False):
