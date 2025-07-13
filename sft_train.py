@@ -50,7 +50,9 @@ def train_sft(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Loading dataset from {dataset_path}...")
-    dataset = load_from_disk(dataset_path)["train"]
+    dataset = load_from_disk(dataset_path)
+    # Use train split if it exists, otherwise use the dataset directly
+    dataset = dataset["train"] if "train" in dataset else dataset
 
     # Add system prompt if requested (skip for no_thinking mode)
     if train_args.add_system_prompt and not getattr(train_args, "no_thinking", False):
@@ -118,13 +120,38 @@ def train_sft(
         report_to="wandb",
     )
 
-    # Initialize SFT Trainer
+    # Create formatting function for the dataset
+    def formatting_func(examples):
+        """Format the dataset examples for SFT training."""
+        texts = []
+        for prompt in examples["prompt"]:
+            # Check if we're using no_thinking mode for Qwen3
+            if (
+                getattr(train_args, "no_thinking", False)
+                and "qwen3" in model_name.lower()
+            ):
+                # For Qwen3 no-thinking mode, use enable_thinking=False
+                text = tokenizer.apply_chat_template(
+                    prompt,
+                    tokenize=False,
+                    add_generation_prompt=False,
+                    enable_thinking=False,
+                )
+            else:
+                # Standard chat template
+                text = tokenizer.apply_chat_template(
+                    prompt, tokenize=False, add_generation_prompt=False
+                )
+            texts.append(text)
+        return texts
+
+    # Initialize SFT Trainer with formatting function
     trainer = SFTTrainer(  # pylint: disable=unexpected-keyword-arg
         model=model,
         args=training_args,
         tokenizer=tokenizer,
         train_dataset=dataset,
-        dataset_text_field="text",
+        formatting_func=formatting_func,
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
         dataset_num_proc=2,
         packing=False,  # Can make training 5x faster for short sequences.
