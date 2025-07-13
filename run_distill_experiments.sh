@@ -54,7 +54,7 @@ if [[ "$SKIP_TRAINING" == false ]]; then
     gpu=${USE_GPUS[$gpu_index]}
     echo "Training config: lr=$lr, wd=$wd, sched=$sched, epochs=$epochs on GPU $gpu"
     CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
-      --dataset "merges/repos_reaper_1000/dataset_sft" \
+      --dataset "merges/repos_reaper_java_train/dataset_sft" \
       --run_name "distill_model" \
       --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" \
       --add_system_prompt &
