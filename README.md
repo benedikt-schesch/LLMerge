@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)]
 
-A toolkit for constructing and analyzing merge conflict datasets, and training models to automatically resolve merge conflicts in code. 🤖
+A toolkit for training and evaluating Large Language Models to automatically resolve merge conflicts in code. 🤖
 
 Evaluation results 🚀:
 
@@ -35,8 +35,7 @@ Evaluation results 🚀:
 - [Features ✨](#features)
 - [Prerequisites 📋](#prerequisites)
 - [Installation ⚙️](#installation)
-- [Usage](#usage)
-- [Dataset Construction 🗂️](#dataset-construction)
+- [Dataset Preparation 📊](#dataset-preparation)
 - [Training 🚀](#training)
 - [Evaluation 📊](#evaluation)
 - [Project Structure](#project-structure)
@@ -44,16 +43,18 @@ Evaluation results 🚀:
 
 ## Features ✨
 
-- 🛠️ Build customizable merge conflict datasets from Git history.
-- 📊 Compute conflict metrics and analyze resolution strategies.
-- 🤖 Train and evaluate models to resolve merge conflicts in Java code.
-- ⚙️ Support full and test datasets with configurable size.
+- 🤖 Train models to resolve merge conflicts using GRPO (Gradient Reward Policy Optimization)
+- 📊 Comprehensive evaluation metrics for merge conflict resolution
+- 🚀 Support for multiple LLMs including DeepSeek, Claude, GPT, and open-source models
+- ⚡ Efficient training with LoRA and UnSloth optimization
+- 📈 Detailed performance benchmarking and visualization
 
-## Prerequisites
+## Prerequisites 📋
 
 - Python 3.8 or later
 - Git
 - CUDA-enabled GPU (optional, for training)
+- Pre-built merge conflict datasets (see [Dataset Preparation](#dataset-preparation))
 
 ## Installation ⚙️
 
@@ -84,56 +85,96 @@ Evaluation results 🚀:
 > uv pip install -U transformers
 > ```
 
-## Usage
+## Dataset Preparation 📊
 
-### Small Test Run
+LLMerge requires pre-built merge conflict datasets for training and evaluation. These datasets should be created using [Merge-Bench-Builder](https://github.com/benedikt-schesch/Merge-Bench-Builder), which provides tools for extracting merge conflicts from Git repositories.
 
-```bash
-./dataset_build_scripts/build_dataset_small.sh -g -m -b
+### Expected Dataset Structure
+
+Datasets should be in HuggingFace format with the following structure:
+```
+merges/
+└── dataset_name/
+    └── dataset/
+        ├── train/
+        └── test/
 ```
 
-### Full Dataset (e.g., 1000 merges)
+### Creating Datasets
+
+1. Clone and set up Merge-Bench-Builder:
+   ```bash
+   git clone https://github.com/benedikt-schesch/Merge-Bench-Builder.git
+   cd Merge-Bench-Builder
+   ```
+
+2. Build your dataset (e.g., Java dataset with 1000 repositories):
+   ```bash
+   ./dataset_build_scripts/build_dataset_reaper_java_1000.sh -g -m -b
+   ```
+
+3. Copy or link the generated dataset to your LLMerge directory:
+   ```bash
+   cp -r merges/repos_reaper_1000 /path/to/LLMerge/merges/
+   ```
+
+### Formatting Existing Conflict Files
+
+If you have existing `.conflict` and `.resolved_conflict` files, you can format them for training:
 
 ```bash
-./dataset_build_scripts/build_dataset_reaper_1000.sh -g -m -b
+python src/build_dataset.py \
+  --conflict_blocks_dir path/to/conflict/files \
+  --output_dir merges/custom_dataset/dataset \
+  --test_size 0.2
 ```
-
-### Test Dataset
-
-```bash
-./dataset_build_scripts/build_dataset_reaper_test.sh -g -m -b
-```
-
-All scripts support:
-- `-g`: Run get & extract steps
-- `-m`: Compute metrics
-- `-b`: Build final dataset
-- `--test_size <fraction>`: Fraction reserved for testing (default: 0.2)
-- `--max_num_merges <n>`: Max merges to include (default: 100)
 
 ## Training 🚀
 
-1. **Stage 1:** 1500 epochs, learning rate = 5e-5
+### GRPO Training
+
+1. **Stage 1:** Initial training with higher learning rate
 
    ```bash
    python3 train.py --epochs 1500 --learning_rate 5e-5
    ```
 
-2. **Stage 2:** Resume training for 2000 epochs, learning rate = 1e-5
+2. **Stage 2:** Fine-tuning with lower learning rate
 
    ```bash
    python3 train.py --epochs 2000 --learning_rate 1e-5 --resume
    ```
 
+### Supervised Fine-Tuning (SFT)
+
+For supervised fine-tuning on specific datasets:
+
+```bash
+python3 sft_train.py --dataset_path merges/custom_dataset/dataset
+```
+
 ## Evaluation 📊
 
-Evaluate all checkpoints in parallel:
+### Evaluate a Single Model
+
+```bash
+python3 eval.py \
+  --model_name unsloth/DeepSeek-R1-Distill-Qwen-14B \
+  --dataset_path merges/repos_reaper_test/dataset \
+  --split test
+```
+
+### Evaluate All Checkpoints
+
+Run parallel evaluation of all saved checkpoints:
 
 ```bash
 ./src/scripts/eval_all_checkpoints.sh <n_processes>
 ```
 
-Build the performance table:
+### Generate Performance Tables
+
+Build LaTeX tables with evaluation results:
 
 ```bash
 ./src/scripts/build_performance_table.sh
@@ -145,21 +186,31 @@ Results will be saved to `tables/results_table.tex`.
 
 ```
 .
-├── dataset_build_scripts/
-│   ├── build_dataset_small.sh
-│   ├── build_dataset_reaper_1000.sh
-│   └── build_dataset_reaper_test.sh
 ├── src/
-│   ├── get_conflict_files.py
-│   ├── extract_conflict_blocks.py
-│   ├── metrics_conflict_blocks.py
-│   └── build_dataset.py
-├── train.py
-├── resolve_conflict.py
-├── tables/
+│   ├── build_dataset.py         # Format conflicts into training data
+│   ├── model_inference.py       # Model inference utilities
+│   ├── prepare_sft_dataset.py   # SFT data preparation
+│   ├── deepseek_sft_data.py     # DeepSeek API integration
+│   ├── utils.py                 # Utility functions
+│   ├── variables.py             # Configuration variables
+│   └── scripts/                 # Evaluation and analysis scripts
+├── train.py                     # GRPO training script
+├── sft_train.py                 # Supervised fine-tuning script
+├── eval.py                      # Model evaluation script
+├── plot_checkpoints.py          # Checkpoint visualization
+├── tables/                      # Performance results
 ├── README.md
 └── LICENSE
 ```
+
+## Configuration
+
+Key configuration variables in `src/variables.py`:
+- `MODEL_NAME`: Base model for training
+- `MAX_SEQUENCE_LENGTH`: Maximum token length
+- `LORA_RANK`: LoRA rank for efficient fine-tuning
+- `SYSTEM_PROMPT`: System prompt for the model
+- `QUERY_PROMPT`: Prompt template for merge conflicts
 
 ## License
 
