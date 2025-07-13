@@ -115,11 +115,6 @@ GRPO uses reward functions to train models with thinking-based reasoning:
 python3 train.py --epochs 1500 --learning_rate 5e-5
 ```
 
-- **Approach**: Reinforcement learning with reward functions
-- **System Prompt**: Automatically injected (thinking-based)
-- **Expected Output**: `<think>reasoning</think>resolved_code`
-- **Best For**: Exploration and reward-based optimization
-
 ### 2. Direct SFT (Imitation Learning)
 
 Direct supervised fine-tuning on human-resolved conflicts without reasoning:
@@ -128,25 +123,7 @@ Direct supervised fine-tuning on human-resolved conflicts without reasoning:
 python3 sft_train.py --dataset merges/repos_reaper_1000/dataset
 ```
 
-- **Approach**: Direct imitation of human resolutions
-- **System Prompt**: None (direct resolution)
-- **Expected Output**: `resolved_code` (no thinking)
-- **Best For**: Learning direct patterns from human examples
-
-### 3. Thinking-based SFT (Reasoning Imitation)
-
-SFT with system prompt injection for thinking-based training:
-
-```bash
-python3 sft_train.py --dataset merges/repos_reaper_1000/dataset --add_system_prompt
-```
-
-- **Approach**: Supervised learning with reasoning prompts
-- **System Prompt**: Injected (thinking-based)
-- **Expected Output**: `<think>reasoning</think>resolved_code`
-- **Best For**: Learning reasoning patterns through supervision
-
-### 4. Knowledge Distillation (API-based)
+### 3. Knowledge Distillation (API-based)
 
 Train on outputs from DeepSeek R1 API (requires separate data preparation):
 
@@ -157,11 +134,6 @@ python3 src/deepseek_sft_data.py --dataset_path merges/repos_reaper_1000/dataset
 # Then train on distilled data
 python3 sft_train.py --dataset merges/repos_reaper_1000/dataset_sft --add_system_prompt
 ```
-
-- **Approach**: Learn from DeepSeek R1's reasoning process
-- **System Prompt**: Injected (thinking-based)
-- **Expected Output**: `<think>reasoning</think>resolved_code`
-- **Best For**: Leveraging state-of-the-art model knowledge
 
 ## Evaluation
 
