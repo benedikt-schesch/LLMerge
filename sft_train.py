@@ -94,7 +94,7 @@ def train_sft(
     )
 
     # Initialize SFT Trainer
-    trainer = SFTTrainer(
+    trainer = SFTTrainer(  # pylint: disable=unexpected-keyword-arg
         model=model,
         args=training_args,
         tokenizer=tokenizer,
