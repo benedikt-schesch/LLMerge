@@ -38,7 +38,7 @@ def train_sft(
         output_dir
         / MODEL_NAME
         / (
-            f"sft_model_"
+            f"{train_args.run_name}_"
             f"lr{train_args.lr}_"
             f"epochs{train_args.epochs}_"
             f"wd{train_args.weight_decay}_"
@@ -185,6 +185,12 @@ if __name__ == "__main__":
         "--add_system_prompt",
         action="store_true",
         help="Add system prompt to dataset (for thinking-based training)",
+    )
+    parser.add_argument(
+        "--run_name",
+        type=str,
+        default="sft_model",
+        help="Name prefix for the training run (e.g., 'distill_model', 'sft_model')",
     )
     args = parser.parse_args()
 
