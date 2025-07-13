@@ -6,7 +6,6 @@ import os
 import re
 import math
 import argparse
-from pathlib import Path
 from typing import List, Dict
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
 from trl import GRPOConfig, GRPOTrainer
@@ -281,9 +280,3 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train(resume_from_checkpoint=resume)
-    if "checkpoints" not in model_name:
-        output_dir = Path("checkpoints") / MODEL_NAME / "grpo_saved_lora"
-    else:
-        output_dir = Path(model_name) / "grpo_saved_lora"
-
-    model.save_lora(output_dir)
