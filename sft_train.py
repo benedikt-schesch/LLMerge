@@ -20,6 +20,7 @@ from src.variables import (
     MODEL_NAME,
     MAX_SEQUENCE_LENGTH_SFT,
     LORA_RANK,
+    SYSTEM_PROMPT,
 )
 
 # Set WANDB project
@@ -47,6 +48,25 @@ def train_sft(
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)
+
+    # Add system prompt if requested
+    if train_args.add_system_prompt:
+
+        def add_system_prompt(example):
+            """Add system prompt to the conversation."""
+            if "prompt" in example and isinstance(example["prompt"], list):
+                # Check if system prompt already exists
+                if not (
+                    example["prompt"] and example["prompt"][0].get("role") == "system"
+                ):
+                    # Add system prompt at the beginning
+                    example["prompt"] = [
+                        {"role": "system", "content": SYSTEM_PROMPT}
+                    ] + example["prompt"]
+            return example
+
+        print("Adding system prompts to dataset...")
+        dataset = dataset.map(add_system_prompt)
 
     # Initialize model
     print(f"Loading model {MODEL_NAME}...")
@@ -160,6 +180,11 @@ if __name__ == "__main__":
         type=str,
         default="linear",
         help="LR Scheduler Type",
+    )
+    parser.add_argument(
+        "--add_system_prompt",
+        action="store_true",
+        help="Add system prompt to dataset (for thinking-based training)",
     )
     args = parser.parse_args()
 
