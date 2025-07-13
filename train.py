@@ -18,6 +18,7 @@ from src.variables import (
     LORA_RANK,
     MAX_OUTPUT_LENGTH,
     MAX_PROMPT_LENGTH,
+    SYSTEM_PROMPT,
 )
 from src.utils import extract_code_block, normalize_java_code
 
@@ -200,6 +201,21 @@ if __name__ == "__main__":
     print("Loading dataset...")
 
     dataset = load_from_disk("merges/repos_reaper_1000/dataset")
+
+    def add_system_prompt(example):
+        """Add system prompt to the conversation."""
+        if "prompt" in example and isinstance(example["prompt"], list):
+            # Check if system prompt already exists
+            if not (example["prompt"] and example["prompt"][0].get("role") == "system"):
+                # Add system prompt at the beginning
+                example["prompt"] = [
+                    {"role": "system", "content": SYSTEM_PROMPT}
+                ] + example["prompt"]
+        return example
+
+    # Apply system prompt to the dataset
+    print("Adding system prompts to dataset...")
+    dataset = dataset.map(add_system_prompt)
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
