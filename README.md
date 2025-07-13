@@ -19,10 +19,11 @@ A toolkit for training Large Language Models to automatically resolve merge conf
 ## Features ✨
 
 - 🤖 Train models to resolve merge conflicts using GRPO (Gradient Reward Policy Optimization)
-- 🎯 Supervised Fine-Tuning (SFT) with knowledge distillation from DeepSeek R1
+- 🎯 Multiple SFT approaches: Direct SFT, Thinking-based SFT, and Knowledge Distillation
 - 🚀 Support for multiple base models including DeepSeek-R1-Distill-Qwen variants
 - ⚡ Efficient training with LoRA and UnSloth optimization
-- 📊 Two training approaches: GRPO for exploration and SFT for imitation learning
+- 🔧 Flexible system prompt injection for different training paradigms
+- 📊 Three distinct training approaches for comprehensive comparison
 
 ## Prerequisites 📋
 
@@ -104,19 +105,63 @@ Datasets created by Merge-Bench-Builder will already be in the correct format.
 
 ## Training 🚀
 
-### GRPO Training
+LLMerge supports three distinct training approaches for comprehensive comparison:
+
+### 1. GRPO Training (Reinforcement Learning)
+
+GRPO uses reward functions to train models with thinking-based reasoning:
 
 ```bash
 python3 train.py --epochs 1500 --learning_rate 5e-5
 ```
 
-### Supervised Fine-Tuning (SFT)
+- **Approach**: Reinforcement learning with reward functions
+- **System Prompt**: Automatically injected (thinking-based)
+- **Expected Output**: `<think>reasoning</think>resolved_code`
+- **Best For**: Exploration and reward-based optimization
 
-For supervised fine-tuning on specific datasets:
+### 2. Direct SFT (Imitation Learning)
+
+Direct supervised fine-tuning on human-resolved conflicts without reasoning:
 
 ```bash
-python3 sft_train.py --dataset_path merges/custom_dataset/dataset
+python3 sft_train.py --dataset merges/repos_reaper_1000/dataset
 ```
+
+- **Approach**: Direct imitation of human resolutions
+- **System Prompt**: None (direct resolution)
+- **Expected Output**: `resolved_code` (no thinking)
+- **Best For**: Learning direct patterns from human examples
+
+### 3. Thinking-based SFT (Reasoning Imitation)
+
+SFT with system prompt injection for thinking-based training:
+
+```bash
+python3 sft_train.py --dataset merges/repos_reaper_1000/dataset --add_system_prompt
+```
+
+- **Approach**: Supervised learning with reasoning prompts
+- **System Prompt**: Injected (thinking-based)
+- **Expected Output**: `<think>reasoning</think>resolved_code`
+- **Best For**: Learning reasoning patterns through supervision
+
+### 4. Knowledge Distillation (API-based)
+
+Train on outputs from DeepSeek R1 API (requires separate data preparation):
+
+```bash
+# First prepare distillation dataset
+python3 src/deepseek_sft_data.py --dataset_path merges/repos_reaper_1000/dataset
+
+# Then train on distilled data
+python3 sft_train.py --dataset merges/repos_reaper_1000/dataset_sft --add_system_prompt
+```
+
+- **Approach**: Learn from DeepSeek R1's reasoning process
+- **System Prompt**: Injected (thinking-based)
+- **Expected Output**: `<think>reasoning</think>resolved_code`
+- **Best For**: Leveraging state-of-the-art model knowledge
 
 ## Evaluation
 
