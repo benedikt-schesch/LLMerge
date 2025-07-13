@@ -267,7 +267,7 @@ if __name__ == "__main__":
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
-        output_dir=f"outputs/{MODEL_NAME}",
+        output_dir=f"checkpoints/{MODEL_NAME}",
     )
 
     trainer = GRPOTrainer(
@@ -281,8 +281,8 @@ if __name__ == "__main__":
         train_dataset=dataset["train"],  # type: ignore
     )
     trainer.train(resume_from_checkpoint=resume)
-    if "outputs" not in model_name:
-        output_dir = Path("outputs") / MODEL_NAME / "grpo_saved_lora"
+    if "checkpoints" not in model_name:
+        output_dir = Path("checkpoints") / MODEL_NAME / "grpo_saved_lora"
     else:
         output_dir = Path(model_name) / "grpo_saved_lora"
 

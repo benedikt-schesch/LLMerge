@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="outputs",
+        default="checkpoints",
         help="Directory to save the trained model",
     )
     parser.add_argument(
