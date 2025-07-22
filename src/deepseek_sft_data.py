@@ -50,7 +50,7 @@ def process_example(example: Dict[str, str]) -> Optional[Dict[str, str]]:
     prompt: str = example["question"]
     response: Optional[Dict[str, str]] = cached_query_deepseek_api(prompt)
     if response is None:
-        return None
+        raise ValueError(response)
     resolution_text: str = response["result"]
     reasoning_text: str = response["reasoning"]
     answer: str = example["answer"]
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="merges/repos_reaper_test/dataset",
+        default="merges/repos_reaper_1000/dataset",
         help="Path to the dataset",
     )
     parser.add_argument(
