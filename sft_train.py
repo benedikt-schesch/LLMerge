@@ -66,12 +66,21 @@ def train_sft(
                     example["prompt"] = [
                         {"role": "system", "content": SYSTEM_PROMPT}
                     ] + example["prompt"]
-            return example
 
         print("Adding system prompts to dataset...")
         dataset = dataset.map(add_system_prompt)
     elif getattr(train_args, "no_thinking", False):
-        print("No-thinking mode enabled - skipping system prompt")
+        print("No-thinking mode enabled - removing system prompts")
+
+        def remove_system_prompt(example):
+            """Remove system prompt from the conversation."""
+            if "prompt" in example and isinstance(example["prompt"], list) and len(example["prompt"]) > 1:
+                # Remove the first element (system prompt)
+                example["prompt"] = example["prompt"][1:]
+            return example
+        
+        dataset = dataset.map(remove_system_prompt)
+
 
     # Initialize model
     print(f"Loading model {model_name}...")
