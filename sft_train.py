@@ -74,13 +74,16 @@ def train_sft(
 
         def remove_system_prompt(example):
             """Remove system prompt from the conversation."""
-            if "prompt" in example and isinstance(example["prompt"], list) and len(example["prompt"]) > 1:
+            if (
+                "prompt" in example
+                and isinstance(example["prompt"], list)
+                and len(example["prompt"]) > 1
+            ):
                 # Remove the first element (system prompt)
                 example["prompt"] = example["prompt"][1:]
             return example
-        
-        dataset = dataset.map(remove_system_prompt)
 
+        dataset = dataset.map(remove_system_prompt)
 
     # Initialize model
     print(f"Loading model {model_name}...")

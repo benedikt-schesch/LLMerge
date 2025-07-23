@@ -15,8 +15,8 @@ done
 LR=(1e-3 1e-4 1e-5)
 WEIGHT_DECAY=(0 0.01)
 SCHEDULER=("linear" "cosine")
-EPOCHS=(1 3)
-USE_GPUS=(4 5 6 7)
+EPOCHS=(1)
+USE_GPUS=(6 7)
 
 # Model configuration
 MODEL_NAME="unsloth/Qwen3-14B"
