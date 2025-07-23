@@ -82,6 +82,23 @@ def train_sft(
         max_lora_rank=LORA_RANK,
     )
 
+    # ==================== START: MINIMAL CHANGE ====================
+    # Pre-format the dataset into a 'text' column before training
+    print("Pre-formatting dataset into a text column...")
+
+    def preformat_for_text_field(example):
+        """Applies chat template to the 'prompt' column and saves it to 'text'."""
+        if "prompt" in example:
+            return {
+                "text": tokenizer.apply_chat_template(
+                    example["prompt"], tokenize=False, add_generation_prompt=False
+                )
+            }
+        return {}
+
+    dataset = dataset.map(preformat_for_text_field, num_proc=2)
+    # ===================== END: MINIMAL CHANGE =====================
+
     # Set up LoRA
     model = FastLanguageModel.get_peft_model(
         model,
@@ -119,7 +136,8 @@ def train_sft(
     )
 
     # Initialize SFT Trainer
-    trainer = SFTTrainer(  # pylint: disable=unexpected-keyword-arg
+    # This call now works correctly because the 'text' column has been created.
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         tokenizer=tokenizer,
