@@ -30,7 +30,7 @@ for lr in "${LR[@]}"; do
       for epochs in "${EPOCHS[@]}"; do
         lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; *) echo $lr;; esac)
         wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
-        model_dir="checkpoints/unsloth/Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
+        model_dir="checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
         model_dirs+=("$model_dir")
         configs+=("$lr,$wd,$sched,$epochs")
       done
