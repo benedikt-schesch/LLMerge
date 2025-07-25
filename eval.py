@@ -116,11 +116,18 @@ def model_inference(
             prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + prompt
 
     # Generate a completion for the given prompt.
+    # For Qwen models, disable thinking mode when no_thinking=True
+    template_kwargs = {
+        "add_generation_prompt": True,
+        "tokenize": True,
+        "return_tensors": "pt",
+    }
+    if no_thinking:
+        template_kwargs["enable_thinking"] = False
+    
     inputs = tokenizer.apply_chat_template(
         prompt,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_tensors="pt",
+        **template_kwargs
     ).to(model.device)  # type: ignore
 
     # Generate with a max number of new tokens.
