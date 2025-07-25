@@ -13,10 +13,10 @@ done
 
 # Configuration arrays
 LR=(1e-5 1e-4 1e-3)
-WEIGHT_DECAY=(0)
-SCHEDULER=("cosine")
-EPOCHS=(1)
-USE_GPUS=(7)
+WEIGHT_DECAY=(0 0.01)
+SCHEDULER=("cosine" "linear")
+EPOCHS=(1 3)
+USE_GPUS=(4 5 6 7)
 
 # Collect all model directories
 declare -a model_dirs
