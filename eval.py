@@ -84,9 +84,29 @@ def model_inference(
     # Prepare the prompt based on the dataset structure
     if "prompt" in example and isinstance(example["prompt"], list):
         # Use the prompt as-is if it's already in chat format
-        prompt = example["prompt"]
-        # Add system prompt if requested and not already present
-        if add_system_prompt and not no_thinking:
+        prompt = example["prompt"].copy()  # Make a copy to avoid modifying original
+
+        # In no_thinking mode, remove system prompt and any thinking-related content
+        if no_thinking:
+            # Remove system prompt if present
+            if prompt and prompt[0].get("role") == "system":
+                prompt = prompt[1:]
+
+            # For assistant messages, remove thinking tags if present
+            for msg in prompt:
+                if msg.get("role") == "assistant" and "<think>" in msg.get(
+                    "content", ""
+                ):
+                    content = msg["content"]
+                    # Remove everything between <think> and </think> tags
+                    import re
+
+                    content = re.sub(
+                        r"<think>.*?</think>\s*", "", content, flags=re.DOTALL
+                    )
+                    msg["content"] = content.strip()
+        elif add_system_prompt:
+            # Add system prompt if requested and not already present
             if not (prompt and prompt[0].get("role") == "system"):
                 prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + prompt
     else:
@@ -316,8 +336,8 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         prompts = [[{"content": example["question"]}]]  # type: ignore
         answers = [example["answer"]]  # type: ignore
 
-        # Evaluate the thinking format.
-        if format_reward(completions, log_wandb=False)[0] > 0:
+        # Evaluate the thinking format (skip for no_thinking models)
+        if not args.no_thinking and format_reward(completions, log_wandb=False)[0] > 0:
             count_thinking += 1
 
         # Evaluate the Java markdown formatting.
@@ -361,7 +381,8 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
 
     logger.success("Evaluation Results:")
     logger.success(f"Total merges evaluated: {total}")
-    logger.success(f"Percentage with valid thinking format: {pct_thinking:.2f}%")
+    if not args.no_thinking:
+        logger.success(f"Percentage with valid thinking format: {pct_thinking:.2f}%")
     logger.success(f"Percentage with valid Java markdown format: {pct_java_md:.2f}%")
     logger.success(f"Percentage correctly raising merge conflict: {pct_conflict:.2f}%")
     logger.success(

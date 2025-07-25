@@ -63,7 +63,7 @@ for dir in "${model_dirs[@]}"; do
   elif [[ -d "$dir" ]]; then
     gpu=${USE_GPUS[$eval_gpu_index]}
     echo "Evaluating $dir on GPU $gpu"
-    CUDA_VISIBLE_DEVICES=$gpu python3 eval.py --model_name "$dir" &
+    CUDA_VISIBLE_DEVICES=$gpu python3 eval.py --model_name "$dir" --no_thinking &
     ((eval_job_count++)); eval_gpu_index=$(( (eval_gpu_index+1)%${#USE_GPUS[@]} )); wait_for_eval_gpu; sleep 1
   else
     echo "Missing dir, skipping eval: $dir"
