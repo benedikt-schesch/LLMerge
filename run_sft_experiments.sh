@@ -16,7 +16,7 @@ LR=(1e-3 1e-4 1e-5)
 WEIGHT_DECAY=(0 0.01)
 SCHEDULER=("linear" "cosine")
 EPOCHS=(1 3)
-USE_GPUS=(2 3 4 5 6)
+USE_GPUS=(5 6 7)
 
 # Collect all model directories
 declare -a model_dirs
@@ -26,7 +26,7 @@ for lr in "${LR[@]}"; do
       for epochs in "${EPOCHS[@]}"; do
         lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; *) echo $lr;; esac)
         wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
-        model_dirs+=("outputs/unsloth/DeepSeek-R1-Distill-Qwen-14B/sft_model_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
+        model_dirs+=("checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
       done
     done
   done
@@ -46,8 +46,8 @@ if [[ "$SKIP_TRAINING" == false ]]; then
     [[ -d "$dir" ]] && { echo "Skipped existing: $dir"; continue; }
     gpu=${USE_GPUS[$gpu_index]}
     echo "Training $dir on GPU $gpu"
-    CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py --model_dir "$dir" &
-    ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
+    # CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py --model_dir "$dir" &
+    # ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
   done
   wait; echo "Training done"
 else
