@@ -23,6 +23,8 @@ from src.variables import (
     SYSTEM_PROMPT,
 )
 
+os.environ["HF_HOME"] = "/m-coriander/coriander/scheschb/.cache/"
+
 # Set WANDB project
 os.environ["WANDB_PROJECT"] = "LLMerge-SFT"
 
@@ -72,28 +74,33 @@ def train_sft(
         dataset = dataset.map(add_system_prompt)
     elif getattr(train_args, "no_thinking", False):
         print("No-thinking mode enabled - skipping system prompt")
-        
+
         # For no_thinking mode, we need to preprocess the dataset to use enable_thinking=False
         def preprocess_for_no_thinking(example):
             """Preprocess dataset for no-thinking mode."""
             if "prompt" in example and isinstance(example["prompt"], list):
                 prompt = example["prompt"].copy()
-                
+
                 # Remove system prompt if present
                 if prompt and prompt[0].get("role") == "system":
                     prompt = prompt[1:]
-                
+
                 # Remove thinking content from assistant messages
                 for msg in prompt:
-                    if msg.get("role") == "assistant" and "<think>" in msg.get("content", ""):
+                    if msg.get("role") == "assistant" and "<think>" in msg.get(
+                        "content", ""
+                    ):
                         content = msg["content"]
                         import re
-                        content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL)
+
+                        content = re.sub(
+                            r"<think>.*?</think>\s*", "", content, flags=re.DOTALL
+                        )
                         msg["content"] = content.strip()
-                
+
                 example["prompt"] = prompt
             return example
-        
+
         print("Preprocessing dataset for no-thinking mode...")
         dataset = dataset.map(preprocess_for_no_thinking)
 
@@ -152,11 +159,11 @@ def train_sft(
                     example["prompt"],
                     tokenize=False,
                     add_generation_prompt=False,
-                    enable_thinking=False
+                    enable_thinking=False,
                 )
                 example["text"] = text
             return example
-        
+
         print("Applying chat template with no-thinking mode...")
         dataset = dataset.map(format_chat_template)
 

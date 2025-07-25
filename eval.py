@@ -10,6 +10,7 @@ Loads the same dataset as in training and computes:
 """
 
 import argparse
+import os
 from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +20,10 @@ import unsloth
 from transformers import TextStreamer
 import torch
 from datasets import load_from_disk
+
+# Set HF_HOME to avoid re-downloading models
+os.environ["HF_HOME"] = "/m-coriander/coriander/scheschb/.cache/"
+
 from train import (
     merged_conflict_reward,
     format_reward,

@@ -21,6 +21,8 @@ from src.variables import (
 )
 from src.utils import extract_code_block, normalize_java_code
 
+# Set HF_HOME to avoid re-downloading models
+os.environ["HF_HOME"] = "/m-coriander/coriander/scheschb/.cache/"
 
 os.environ["WANDB_PROJECT"] = "LLMerge"
 
