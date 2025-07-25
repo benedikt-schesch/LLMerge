@@ -124,11 +124,8 @@ def model_inference(
     }
     if no_thinking:
         template_kwargs["enable_thinking"] = False
-    
-    inputs = tokenizer.apply_chat_template(
-        prompt,
-        **template_kwargs
-    ).to(model.device)  # type: ignore
+
+    inputs = tokenizer.apply_chat_template(prompt, **template_kwargs).to(model.device)  # type: ignore
 
     # Generate with a max number of new tokens.
     output_tokens = model.generate(
