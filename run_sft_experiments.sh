@@ -42,12 +42,31 @@ wait_for_eval_gpu() { [[ $eval_job_count -ge $(( ${#USE_GPUS[@]} * 2 )) ]] && wa
 # ─── Training ───────────────────────────────────────────────────────────────
 if [[ "$SKIP_TRAINING" == false ]]; then
   echo "Training ${#model_dirs[@]} configs on GPUs: ${USE_GPUS[*]}"
-  for dir in "${model_dirs[@]}"; do
-    [[ -d "$dir" ]] && { echo "Skipped existing: $dir"; continue; }
-    gpu=${USE_GPUS[$gpu_index]}
-    echo "Training $dir on GPU $gpu"
-    CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py --model_dir "$dir" &
-    ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
+  for lr in "${LR[@]}"; do
+    for wd in "${WEIGHT_DECAY[@]}"; do
+      for sched in "${SCHEDULER[@]}"; do
+        for epochs in "${EPOCHS[@]}"; do
+          lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; *) echo $lr;; esac)
+          wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
+          model_dir="checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
+
+          [[ -d "$model_dir" ]] && { echo "Skipped existing: $model_dir"; continue; }
+
+          gpu=${USE_GPUS[$gpu_index]}
+          echo "Training config: lr=$lr, wd=$wd, sched=$sched, epochs=$epochs on GPU $gpu"
+
+          # Run SFT with proper arguments
+          CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
+            --dataset "merges/repos_reaper_java_train/dataset" \
+            --run_name "direct_sft" \
+            --model_name "unsloth/Qwen3-14B" \
+            --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" \
+            --no_thinking &
+
+          ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
+        done
+      done
+    done
   done
   wait; echo "Training done"
 else
