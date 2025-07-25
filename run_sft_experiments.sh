@@ -37,7 +37,7 @@ gpu_index=0; job_count=0
 eval_gpu_index=0; eval_job_count=0
 # Helpers
 wait_for_gpu() { [[ $job_count -ge ${#USE_GPUS[@]} ]] && wait -n && ((job_count--)); }
-wait_for_eval_gpu() { [[ $eval_job_count -ge $(( ${#USE_GPUS[@]} * 4 )) ]] && wait -n && ((eval_job_count--)); }
+wait_for_eval_gpu() { [[ $eval_job_count -ge $(( ${#USE_GPUS[@]} * 2 )) ]] && wait -n && ((eval_job_count--)); }
 
 # ─── Training ───────────────────────────────────────────────────────────────
 if [[ "$SKIP_TRAINING" == false ]]; then
