@@ -46,8 +46,8 @@ if [[ "$SKIP_TRAINING" == false ]]; then
     [[ -d "$dir" ]] && { echo "Skipped existing: $dir"; continue; }
     gpu=${USE_GPUS[$gpu_index]}
     echo "Training $dir on GPU $gpu"
-    # CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py --model_dir "$dir" &
-    # ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
+    CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py --model_dir "$dir" &
+    ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
   done
   wait; echo "Training done"
 else
