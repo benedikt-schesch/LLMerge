@@ -24,7 +24,12 @@ from train import (
     format_reward,
     java_markdown_reward,
 )
-from src.variables import MAX_SEQUENCE_LENGTH, MAX_OUTPUT_LENGTH, MODEL_NAME
+from src.variables import (
+    MAX_SEQUENCE_LENGTH,
+    MAX_OUTPUT_LENGTH,
+    MODEL_NAME,
+    SYSTEM_PROMPT,
+)
 from src.utils import cached_query_deepseek_api, cached_query_openrouter
 
 # Define remote/api model identification
@@ -51,7 +56,9 @@ open("eval.log", "w", encoding="utf-8").close()  # pylint: disable=consider-usin
 logger.add("eval.log", backtrace=True, diagnose=True)
 
 
-def model_inference(example, model, tokenizer, text_streamer):
+def model_inference(
+    example, model, tokenizer, text_streamer, add_system_prompt=False, no_thinking=False
+):
     """Perform model inference."""
     if model == "api/deepseek-r1":
         # Bypass local model and call deepseek_sft_data's query_deepseek_api
@@ -73,9 +80,24 @@ def model_inference(example, model, tokenizer, text_streamer):
         # Combine them into a single string that the rest of the eval script expects
         full_completion = f"<think>\n{reasoning}</think>\n{result}"
         return full_completion
+
+    # Prepare the prompt based on the dataset structure
+    if "prompt" in example and isinstance(example["prompt"], list):
+        # Use the prompt as-is if it's already in chat format
+        prompt = example["prompt"]
+        # Add system prompt if requested and not already present
+        if add_system_prompt and not no_thinking:
+            if not (prompt and prompt[0].get("role") == "system"):
+                prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + prompt
+    else:
+        # Create chat format from question
+        prompt = [{"role": "user", "content": example["question"]}]
+        if add_system_prompt and not no_thinking:
+            prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + prompt
+
     # Generate a completion for the given prompt.
     inputs = tokenizer.apply_chat_template(
-        example["prompt"],  # type: ignore
+        prompt,
         add_generation_prompt=True,
         tokenize=True,
         return_tensors="pt",
@@ -102,7 +124,7 @@ def get_model(
         return "api/deepseek-r1", None, None
     if is_api_model(model_name):
         return model_name, None, None
-    if "unsloth" in model_name or "output" in model_name:
+    if "unsloth" in model_name or "output" in model_name or "checkpoint" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQUENCE_LENGTH,
@@ -163,10 +185,28 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
         default=False,
         help="Load model in 4bit mode",
     )
+    parser.add_argument(
+        "--no_thinking",
+        action="store_true",
+        help="Model was trained without thinking mode (for direct SFT)",
+    )
+    parser.add_argument(
+        "--add_system_prompt",
+        action="store_true",
+        help="Add system prompt to evaluation (if model was trained with it)",
+    )
     args = parser.parse_args()
 
     # Load the dataset (using the same training data)
-    dataset = load_from_disk(args.dataset_path)[args.split]
+    # Try to load with split first, if that fails, load the entire dataset
+    try:
+        dataset = load_from_disk(args.dataset_path)[args.split]
+    except KeyError:
+        # If the dataset doesn't have splits, load it directly
+        dataset = load_from_disk(args.dataset_path)
+        # If it's a DatasetDict with a single key, use that
+        if hasattr(dataset, "keys") and len(dataset.keys()) == 1:
+            dataset = dataset[list(dataset.keys())[0]]
 
     logger.info("Starting evaluation...")
     logger.info(f"Loaded {len(dataset)} examples.")
@@ -210,12 +250,19 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
                 model_name, load_in_4bit, lora_weights
             )
 
-        def _gen(args):
-            idx, example = args
+        def _gen(gen_args):
+            idx, example = gen_args
             output_file_path = output_dir / f"example_{idx}.txt"
             if not output_file_path.exists():
                 logger.info(f"Parallel processing example {idx}...")
-                full = model_inference(example, model, tokenizer, text_streamer)
+                full = model_inference(
+                    example,
+                    model,
+                    tokenizer,
+                    text_streamer,
+                    args.add_system_prompt,
+                    args.no_thinking,
+                )
                 output_file_path.write_text(full, encoding="utf-8")
 
         with ThreadPoolExecutor(max_workers=32) as executor:
@@ -244,7 +291,14 @@ def main():  # pylint: disable=too-many-locals, too-many-statements, too-many-br
                 model, tokenizer, text_streamer = get_model(
                     model_name, load_in_4bit, lora_weights
                 )
-            full_completion = model_inference(example, model, tokenizer, text_streamer)
+            full_completion = model_inference(
+                example,
+                model,
+                tokenizer,
+                text_streamer,
+                args.add_system_prompt,
+                args.no_thinking,
+            )
             # Write the full completion to file.
             with open(output_file_path, "w", encoding="utf-8") as output_file:
                 output_file.write(full_completion)
