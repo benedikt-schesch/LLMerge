@@ -26,7 +26,7 @@ for lr in "${LR[@]}"; do
       for epochs in "${EPOCHS[@]}"; do
         lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; *) echo $lr;; esac)
         wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
-        model_dirs+=("checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
+        model_dirs+=("checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
       done
     done
   done
@@ -48,7 +48,7 @@ if [[ "$SKIP_TRAINING" == false ]]; then
         for epochs in "${EPOCHS[@]}"; do
           lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; *) echo $lr;; esac)
           wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
-          model_dir="checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
+          model_dir="checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
 
           [[ -d "$model_dir" ]] && { echo "Skipped existing: $model_dir"; continue; }
 
@@ -59,9 +59,8 @@ if [[ "$SKIP_TRAINING" == false ]]; then
           CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
             --dataset "merges/repos_reaper_java_train/dataset" \
             --run_name "direct_sft" \
-            --model_name "unsloth/Qwen3-14B" \
-            --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" \
-            --no_thinking &
+            --model_name "unsloth/Phi-4" \
+            --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" &
 
           ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
         done
@@ -82,7 +81,7 @@ for dir in "${model_dirs[@]}"; do
   elif [[ -d "$dir" ]]; then
     gpu=${USE_GPUS[$eval_gpu_index]}
     echo "Evaluating $dir on GPU $gpu"
-    CUDA_VISIBLE_DEVICES=$gpu python3 eval.py --model_name "$dir" --no_thinking &
+    CUDA_VISIBLE_DEVICES=$gpu python3 eval.py --model_name "$dir" &
     ((eval_job_count++)); eval_gpu_index=$(( (eval_gpu_index+1)%${#USE_GPUS[@]} )); wait_for_eval_gpu; sleep 1
   else
     echo "Missing dir, skipping eval: $dir"

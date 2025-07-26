@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from loguru import logger
 import unsloth
+from unsloth.chat_templates import get_chat_template
 from transformers import TextStreamer
 import torch
 from datasets import load_from_disk
@@ -153,12 +154,21 @@ def get_model(
         return "api/deepseek-r1", None, None
     if is_api_model(model_name):
         return model_name, None, None
+
     if "unsloth" in model_name or "output" in model_name or "checkpoint" in model_name:
         model, tokenizer = unsloth.FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=MAX_SEQUENCE_LENGTH,
             load_in_4bit=load_in_4bit,
         )
+
+        # Set up chat template for Phi-4 (same as in training)
+        tokenizer = get_chat_template(
+            tokenizer,
+            chat_template="phi-4",
+        )
+
+        # Enable inference mode for 2x faster inference
         unsloth.FastLanguageModel.for_inference(model)
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer  # pylint: disable=import-outside-toplevel
@@ -170,7 +180,9 @@ def get_model(
         model.load_adapter(lora_weights)
 
     print(f"Device: {model.device}")
-    text_streamer = TextStreamer(tokenizer)  # type: ignore
+    text_streamer = TextStreamer(
+        tokenizer, skip_prompt=True
+    )  # Skip prompt for cleaner output
     return model, tokenizer, text_streamer
 
 

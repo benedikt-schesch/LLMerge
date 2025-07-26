@@ -13,14 +13,14 @@ import argparse
 from pathlib import Path
 from datasets import load_from_disk
 from unsloth import FastLanguageModel, is_bfloat16_supported
-from transformers import TrainingArguments
+from unsloth.chat_templates import get_chat_template, train_on_responses_only
+from transformers import TrainingArguments, DataCollatorForSeq2Seq
 from trl import SFTTrainer
 
 from src.variables import (
     MODEL_NAME,
     MAX_SEQUENCE_LENGTH_SFT,
     LORA_RANK,
-    SYSTEM_PROMPT,
 )
 
 os.environ["HF_HOME"] = "/m-coriander/coriander/scheschb/.cache/"
@@ -54,55 +54,8 @@ def train_sft(
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)["train"]
 
-    # Add system prompt if requested (skip for no_thinking mode)
-    if train_args.add_system_prompt and not getattr(train_args, "no_thinking", False):
-
-        def add_system_prompt(example):
-            """Add system prompt to the conversation."""
-            if "prompt" in example and isinstance(example["prompt"], list):
-                # Check if system prompt already exists
-                if not (
-                    example["prompt"] and example["prompt"][0].get("role") == "system"
-                ):
-                    # Add system prompt at the beginning
-                    example["prompt"] = [
-                        {"role": "system", "content": SYSTEM_PROMPT}
-                    ] + example["prompt"]
-            return example
-
-        print("Adding system prompts to dataset...")
-        dataset = dataset.map(add_system_prompt)
-    elif getattr(train_args, "no_thinking", False):
-        print("No-thinking mode enabled - skipping system prompt")
-
-        # For no_thinking mode, we need to preprocess the dataset to use enable_thinking=False
-        def preprocess_for_no_thinking(example):
-            """Preprocess dataset for no-thinking mode."""
-            if "prompt" in example and isinstance(example["prompt"], list):
-                prompt = example["prompt"].copy()
-
-                # Remove system prompt if present
-                if prompt and prompt[0].get("role") == "system":
-                    prompt = prompt[1:]
-
-                # Remove thinking content from assistant messages
-                for msg in prompt:
-                    if msg.get("role") == "assistant" and "<think>" in msg.get(
-                        "content", ""
-                    ):
-                        content = msg["content"]
-                        import re
-
-                        content = re.sub(
-                            r"<think>.*?</think>\s*", "", content, flags=re.DOTALL
-                        )
-                        msg["content"] = content.strip()
-
-                example["prompt"] = prompt
-            return example
-
-        print("Preprocessing dataset for no-thinking mode...")
-        dataset = dataset.map(preprocess_for_no_thinking)
+    # No preprocessing needed - use raw question/answer pairs directly
+    print("Using simplified question-answer format...")
 
     # Initialize model
     print(f"Loading model {model_name}...")
@@ -110,7 +63,12 @@ def train_sft(
         model_name=model_name,
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
         load_in_4bit=True,
-        max_lora_rank=LORA_RANK,
+    )
+
+    # Set up chat template for Phi-4
+    tokenizer = get_chat_template(
+        tokenizer,
+        chat_template="phi-4",
     )
 
     # Set up LoRA
@@ -127,8 +85,12 @@ def train_sft(
             "down_proj",
         ],
         lora_alpha=LORA_RANK,
+        lora_dropout=0,  # Optimized for 0
+        bias="none",  # Optimized for "none"
         use_gradient_checkpointing="unsloth",
         random_state=3407,
+        use_rslora=False,
+        loftq_config=None,
     )
 
     # Training arguments
@@ -149,34 +111,43 @@ def train_sft(
         report_to="wandb",
     )
 
-    # For no_thinking mode, we need to handle the tokenization differently
-    if getattr(train_args, "no_thinking", False):
-        # Create a custom formatting function that uses enable_thinking=False
-        def format_chat_template(example):
-            """Format the prompt using tokenizer with enable_thinking=False."""
-            if "prompt" in example and isinstance(example["prompt"], list):
-                text = tokenizer.apply_chat_template(
-                    example["prompt"],
-                    tokenize=False,
-                    add_generation_prompt=False,
-                    enable_thinking=False,
-                )
-                example["text"] = text
-            return example
+    # Format dataset using simple question/answer pairs
+    def formatting_prompts_func(examples):
+        """Format prompts using simple question-answer pairs."""
+        texts = []
+        for question, answer in zip(examples["question"], examples["answer"]):
+            # Create simple conversation: user question -> assistant answer
+            conversation = [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer},
+            ]
+            text = tokenizer.apply_chat_template(
+                conversation, tokenize=False, add_generation_prompt=False
+            )
+            texts.append(text)
+        return {"text": texts}
 
-        print("Applying chat template with no-thinking mode...")
-        dataset = dataset.map(format_chat_template)
+    print("Formatting dataset with simple question-answer pairs...")
+    dataset = dataset.map(formatting_prompts_func, batched=True, num_proc=2)
 
     # Initialize SFT Trainer
-    trainer = SFTTrainer(  # pylint: disable=unexpected-keyword-arg
+    trainer = SFTTrainer(
         model=model,
         args=training_args,
         tokenizer=tokenizer,
         train_dataset=dataset,
         dataset_text_field="text",
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
-        dataset_num_proc=2,
+        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         packing=False,  # Can make training 5x faster for short sequences.
+    )
+
+    # Use Unsloth's train_on_responses_only for better training
+    print("Setting up training on responses only...")
+    trainer = train_on_responses_only(
+        trainer,
+        instruction_part="<|im_start|>user<|im_sep|>",
+        response_part="<|im_start|>assistant<|im_sep|>",
     )
 
     # Start training
@@ -236,11 +207,6 @@ if __name__ == "__main__":
         help="LR Scheduler Type",
     )
     parser.add_argument(
-        "--add_system_prompt",
-        action="store_true",
-        help="Add system prompt to dataset (for thinking-based training)",
-    )
-    parser.add_argument(
         "--run_name",
         type=str,
         default="sft_model",
@@ -251,11 +217,6 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Model name to use (overrides default from variables.py)",
-    )
-    parser.add_argument(
-        "--no_thinking",
-        action="store_true",
-        help="Disable thinking mode for Qwen3 models (direct SFT without reasoning)",
     )
     args = parser.parse_args()
 
