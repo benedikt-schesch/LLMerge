@@ -12,11 +12,11 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Configuration arrays
-LR=(1e-5 1e-4 1e-3)
+LR=(1e-6 1e-5 1e-4)
 WEIGHT_DECAY=(0 0.01)
 SCHEDULER=("cosine" "linear")
 EPOCHS=(1 3)
-USE_GPUS=(2 3 4 5 6 7)
+USE_GPUS=(0 1 2 3 4 6 7)
 
 # Collect all model directories
 declare -a model_dirs
