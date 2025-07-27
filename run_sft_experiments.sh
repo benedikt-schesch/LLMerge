@@ -51,16 +51,15 @@ if [[ "$SKIP_TRAINING" == false ]]; then
           model_dir="checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
 
           [[ -d "$model_dir" ]] && { echo "Skipped existing: $model_dir"; continue; }
-          echo $model_dir
           gpu=${USE_GPUS[$gpu_index]}
           echo "Training config: lr=$lr, wd=$wd, sched=$sched, epochs=$epochs on GPU $gpu"
 
-          # Run SFT with proper arguments
-          # CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
-          #   --dataset "merges/repos_reaper_java_train/dataset" \
-          #   --run_name "direct_sft" \
-          #   --model_name "unsloth/Phi-4" \
-          #   --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" &
+          Run SFT with proper arguments
+          CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
+            --dataset "merges/repos_reaper_java_train/dataset" \
+            --run_name "direct_sft" \
+            --model_name "unsloth/Phi-4" \
+            --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" &
 
           ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1
         done
