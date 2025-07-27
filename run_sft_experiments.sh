@@ -54,7 +54,6 @@ if [[ "$SKIP_TRAINING" == false ]]; then
           gpu=${USE_GPUS[$gpu_index]}
           echo "Training config: lr=$lr, wd=$wd, sched=$sched, epochs=$epochs on GPU $gpu"
 
-          Run SFT with proper arguments
           CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
             --dataset "merges/repos_reaper_java_train/dataset" \
             --run_name "direct_sft" \
