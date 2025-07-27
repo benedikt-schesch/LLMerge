@@ -6,7 +6,7 @@
 
 A toolkit for constructing and analyzing merge conflict datasets, and training models to automatically resolve merge conflicts in code. 🤖
 
-Evaluation results 🚀:
+## Evaluation Results 🚀
 
 | Model | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |
 | --- | ---: | ---: | ---: | ---: |
@@ -27,8 +27,7 @@ Evaluation results 🚀:
 | Deepseek R1 Distill Qwen 32B | 22.83% | 30.40% | 30.65% | 99.01% |
 | Deepseek R1 Distill Llama 70B | 25.81% | 33.00% | 29.40% | 98.88% |
 | Deepseek R1 | 45.66% | 53.60% | 8.81% | 99.50% |
-| Ours | 48.76% | 58.93% | 0.12% | 100.00% |
-| Best SFT model |  17.99 % |  23.70 % |  42.56 % |  98.26 % |
+| **Ours** | **48.76%** | **58.93%** | **0.12%** | **100.00%** |
 
 ## Table of Contents
 
@@ -36,24 +35,30 @@ Evaluation results 🚀:
 - [Prerequisites 📋](#prerequisites)
 - [Installation ⚙️](#installation)
 - [Usage](#usage)
-- [Dataset Construction 🗂️](#dataset-construction)
-- [Training 🚀](#training)
-- [Evaluation 📊](#evaluation)
+  - [Dataset Construction 🗂️](#dataset-construction)
+  - [Training 🚀](#training)
+  - [Evaluation 📊](#evaluation)
+- [Advanced Training Methods](#advanced-training-methods)
+  - [Supervised Fine-Tuning (SFT)](#supervised-fine-tuning-sft)
+  - [GRPO Training](#grpo-training)
 - [Project Structure](#project-structure)
 - [License](#license)
 
 ## Features ✨
 
-- 🛠️ Build customizable merge conflict datasets from Git history.
-- 📊 Compute conflict metrics and analyze resolution strategies.
-- 🤖 Train and evaluate models to resolve merge conflicts in Java code.
-- ⚙️ Support full and test datasets with configurable size.
+- 🛠️ Build customizable merge conflict datasets from Git history
+- 📊 Compute conflict metrics and analyze resolution strategies
+- 🤖 Train and evaluate models to resolve merge conflicts in Java code
+- ⚙️ Support for multiple training approaches: GRPO, SFT, and distillation
+- 🔄 API integration for DeepSeek R1 and OpenRouter models
+- 📈 Comprehensive evaluation framework with multiple metrics
 
-## Prerequisites
+## Prerequisites 📋
 
 - Python 3.8 or later
 - Git
 - CUDA-enabled GPU (optional, for training)
+- API keys for DeepSeek or OpenRouter (optional, for API-based models)
 
 ## Installation ⚙️
 
@@ -86,19 +91,21 @@ Evaluation results 🚀:
 
 ## Usage
 
-### Small Test Run
+### Dataset Construction 🗂️
+
+#### Small Test Run
 
 ```bash
 ./dataset_build_scripts/build_dataset_small.sh -g -m -b
 ```
 
-### Full Dataset (e.g., 1000 merges)
+#### Full Dataset (e.g., 1000 merges)
 
 ```bash
 ./dataset_build_scripts/build_dataset_reaper_1000.sh -g -m -b
 ```
 
-### Test Dataset
+#### Test Dataset
 
 ```bash
 ./dataset_build_scripts/build_dataset_reaper_test.sh -g -m -b
@@ -111,7 +118,9 @@ All scripts support:
 - `--test_size <fraction>`: Fraction reserved for testing (default: 0.2)
 - `--max_num_merges <n>`: Max merges to include (default: 100)
 
-## Training 🚀
+### Training 🚀
+
+#### GRPO Training (Default)
 
 1. **Stage 1:** 1500 epochs, learning rate = 5e-5
 
@@ -125,41 +134,113 @@ All scripts support:
    python3 train.py --epochs 2000 --learning_rate 1e-5 --resume
    ```
 
-## Evaluation 📊
+#### Supervised Fine-Tuning (SFT)
 
-Evaluate all checkpoints in parallel:
+Run experiments with different hyperparameters:
 
 ```bash
-./src/scripts/eval_all_checkpoints.sh <n_processes>
+# Run all SFT experiments
+./run_sft_experiments.sh
+
+# Skip training and only evaluate existing models
+./run_sft_experiments.sh --skip-training
 ```
 
-Build the performance table:
+### Evaluation 📊
+
+#### Evaluate a single model
+
+```bash
+python3 eval.py --model_name "model_name_or_path" --dataset_path "merges/repos_reaper_test/dataset"
+```
+
+#### Evaluate API models
+
+```bash
+# DeepSeek R1
+python3 eval.py --model_name "api/deepseek-r1"
+
+# OpenRouter models
+python3 eval.py --model_name "anthropic/claude-3.7-sonnet"
+python3 eval.py --model_name "openai/gpt-4.1"
+```
+
+#### Build performance tables
 
 ```bash
 ./src/scripts/build_performance_table.sh
 ```
 
-Results will be saved to `tables/results_table.tex`.
+Results will be saved to:
+- `tables/results_table.tex` (LaTeX format)
+- `tables/results_table.md` (Markdown format)
+- `tables/results_table.pdf` (PDF visualization)
+- `tables/results_table.jpg` (Image format)
+
+## Advanced Training Methods
+
+### Supervised Fine-Tuning (SFT)
+
+Create SFT datasets using DeepSeek R1 API:
+
+1. **Generate examples:**
+   ```bash
+   export DEEPSEEK_API_KEY="your_api_key_here"
+   python src/deepseek_sft_data.py --dataset merges/repos_reaper_100/dataset
+   ```
+
+2. **Prepare dataset:**
+   ```bash
+   python src/prepare_sft_dataset.py --correct_only
+   ```
+
+3. **Fine-tune:**
+   ```bash
+   python sft_train.py --dataset outputs/sft_dataset/correct_only --epochs 5
+   ```
+
+See [README_SFT.md](README_SFT.md) for detailed instructions.
+
+### GRPO Training
+
+GRPO (Gradient Reward Policy Optimization) is the default training method that uses reward signals to improve model performance on merge conflict resolution.
 
 ## Project Structure
 
 ```
 .
-├── dataset_build_scripts/
+├── dataset_build_scripts/     # Scripts for building datasets
 │   ├── build_dataset_small.sh
 │   ├── build_dataset_reaper_1000.sh
 │   └── build_dataset_reaper_test.sh
-├── src/
-│   ├── get_conflict_files.py
+├── src/                       # Source code
+│   ├── build_dataset.py       # Dataset construction
+│   ├── deepseek_sft_data.py   # DeepSeek API integration
 │   ├── extract_conflict_blocks.py
+│   ├── find_merges.py
+│   ├── get_conflict_files.py
 │   ├── metrics_conflict_blocks.py
-│   └── build_dataset.py
-├── train.py
-├── resolve_conflict.py
-├── tables/
+│   ├── model_inference.py
+│   ├── prepare_sft_dataset.py
+│   ├── utils.py
+│   ├── variables.py           # Configuration variables
+│   └── scripts/               # Utility scripts
+├── tables/                    # Generated result tables
+├── train.py                   # GRPO training script
+├── sft_train.py              # SFT training script
+├── eval.py                   # Evaluation script
+├── run_sft_experiments.sh    # SFT experiment runner
 ├── README.md
+├── README_SFT.md             # SFT-specific documentation
 └── LICENSE
 ```
+
+## Key Metrics Explained
+
+- **Correct merges**: Percentage of merges that exactly match the developer's resolution
+- **Semantic merges**: Percentage of merges that are semantically equivalent (ignoring whitespace/formatting)
+- **Raising conflict**: Percentage where the model correctly identifies unresolvable conflicts
+- **Valid Java markdown**: Percentage of responses with properly formatted Java code blocks
 
 ## License
 
