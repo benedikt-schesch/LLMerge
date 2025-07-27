@@ -51,7 +51,7 @@ if [[ "$SKIP_TRAINING" == false ]]; then
           model_dir="checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
 
           [[ -d "$model_dir" ]] && { echo "Skipped existing: $model_dir"; continue; }
-
+          echo $model_dir
           gpu=${USE_GPUS[$gpu_index]}
           echo "Training config: lr=$lr, wd=$wd, sched=$sched, epochs=$epochs on GPU $gpu"
 
