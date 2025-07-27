@@ -24,7 +24,7 @@ for lr in "${LR[@]}"; do
   for wd in "${WEIGHT_DECAY[@]}"; do
     for sched in "${SCHEDULER[@]}"; do
       for epochs in "${EPOCHS[@]}"; do
-        lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; 1e-6) echo 1e-06;; *) echo $lr;; esac)
+        lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 5e-6) echo 5e-06;;5e-5) echo 5e-05;;1e-5) echo 1e-05;; 1e-6) echo 1e-06;; *) echo $lr;; esac)
         wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
         model_dirs+=("checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
       done
@@ -46,7 +46,7 @@ if [[ "$SKIP_TRAINING" == false ]]; then
     for wd in "${WEIGHT_DECAY[@]}"; do
       for sched in "${SCHEDULER[@]}"; do
         for epochs in "${EPOCHS[@]}"; do
-          lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 1e-5) echo 1e-05;; 1e-6) echo 1e-06;; *) echo $lr;; esac)
+          lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 5e-6) echo 5e-06;;5e-5) echo 5e-05;;1e-5) echo 1e-05;; 1e-6) echo 1e-06;; *) echo $lr;; esac)
           wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
           model_dir="checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
 
