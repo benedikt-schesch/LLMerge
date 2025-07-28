@@ -13,7 +13,7 @@ import argparse
 from pathlib import Path
 from datasets import load_from_disk
 from unsloth import FastLanguageModel, is_bfloat16_supported
-from unsloth.chat_templates import get_chat_template, train_on_responses_only
+from unsloth.chat_templates import get_chat_template
 from transformers import TrainingArguments, DataCollatorForSeq2Seq
 from trl import SFTTrainer
 
@@ -140,14 +140,6 @@ def train_sft(
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         packing=False,  # Can make training 5x faster for short sequences.
-    )
-
-    # Use Unsloth's train_on_responses_only for better training
-    print("Setting up training on responses only...")
-    trainer = train_on_responses_only(
-        trainer,
-        instruction_part="<|im_start|>user<|im_sep|>",
-        response_part="<|im_start|>assistant<|im_sep|>",
     )
 
     # Start training
