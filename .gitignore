@@ -21,6 +21,7 @@ unsloth_compiled_cache/
 debug.txt
 grpo_trainer_lora_model
 query_cache/
+checkpoints/
 
 # Compiled class file
 *.class
