@@ -12,7 +12,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Configuration arrays
-LR=(1e-5 1e-4 5e-5)
+LR=(1e-5 1e-6)
 WEIGHT_DECAY=(0 0.01)
 SCHEDULER=("cosine" "linear")
 EPOCHS=(1 3)
@@ -26,7 +26,7 @@ for lr in "${LR[@]}"; do
       for epochs in "${EPOCHS[@]}"; do
         lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 5e-6) echo 5e-06;;5e-5) echo 5e-05;;1e-5) echo 1e-05;; 1e-6) echo 1e-06;; *) echo $lr;; esac)
         wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
-        model_dirs+=("checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
+        model_dirs+=("checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model")
       done
     done
   done
@@ -48,7 +48,7 @@ if [[ "$SKIP_TRAINING" == false ]]; then
         for epochs in "${EPOCHS[@]}"; do
           lr_fmt=$(case $lr in 1e-3) echo 0.001;; 1e-4) echo 0.0001;; 5e-6) echo 5e-06;;5e-5) echo 5e-05;;1e-5) echo 1e-05;; 1e-6) echo 1e-06;; *) echo $lr;; esac)
           wd_fmt=$([[ "$wd" == "0" ]] && echo 0.0 || echo $wd)
-          model_dir="checkpoints/unsloth_Phi-4/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
+          model_dir="checkpoints/unsloth_Qwen3-14B/direct_sft_lr${lr_fmt}_epochs${epochs}_wd${wd_fmt}_${sched}/final_model"
 
           [[ -d "$model_dir" ]] && { echo "Skipped existing: $model_dir"; continue; }
           gpu=${USE_GPUS[$gpu_index]}
@@ -57,7 +57,7 @@ if [[ "$SKIP_TRAINING" == false ]]; then
           CUDA_VISIBLE_DEVICES=$gpu python3 sft_train.py \
             --dataset "merges/repos_reaper_java_train/dataset" \
             --run_name "direct_sft" \
-            --model_name "unsloth/Phi-4" \
+            --model_name "unsloth/Qwen3-14B" \
             --lr "$lr" --epochs "$epochs" --weight_decay "$wd" --lr_scheduler_type "$sched" &
 
           ((job_count++)); gpu_index=$(( (gpu_index+1)%${#USE_GPUS[@]} )); wait_for_gpu; sleep 1

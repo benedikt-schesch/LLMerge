@@ -65,10 +65,10 @@ def train_sft(
         load_in_4bit=True,
     )
 
-    # Set up chat template for Phi-4
+    # Set up chat template for Qwen3
     tokenizer = get_chat_template(
         tokenizer,
-        chat_template="phi-4",
+        chat_template="qwen-3",
     )
 
     # Set up LoRA
@@ -122,7 +122,7 @@ def train_sft(
                 {"role": "assistant", "content": answer},
             ]
             text = tokenizer.apply_chat_template(
-                conversation, tokenize=False, add_generation_prompt=False
+                conversation, tokenize=False, enable_thinking=False
             )
             texts.append(text)
         return {"text": texts}

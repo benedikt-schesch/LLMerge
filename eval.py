@@ -122,22 +122,25 @@ def model_inference(
             prompt = [{"role": "system", "content": SYSTEM_PROMPT}] + prompt
 
     # Generate a completion for the given prompt.
-    # For Qwen models, disable thinking mode when no_thinking=True
+    # Always disable thinking mode for Qwen models
     template_kwargs = {
         "add_generation_prompt": True,
         "tokenize": True,
         "return_tensors": "pt",
+        "enable_thinking": False,  # Always disabled for non-reasoning mode
     }
-    if no_thinking:
-        template_kwargs["enable_thinking"] = False
 
     inputs = tokenizer.apply_chat_template(prompt, **template_kwargs).to(model.device)  # type: ignore
 
     # Generate with a max number of new tokens.
+    # Use Qwen3 recommended parameters for non-thinking mode
     output_tokens = model.generate(
         input_ids=inputs,
         streamer=text_streamer,
         max_new_tokens=MAX_OUTPUT_LENGTH,
+        temperature=0.7,
+        top_p=0.8,
+        top_k=20,
         use_cache=True,
     )
     # Get the full completion before truncation.
@@ -162,10 +165,10 @@ def get_model(
             load_in_4bit=load_in_4bit,
         )
 
-        # Set up chat template for Phi-4 (same as in training)
+        # Set up chat template for Qwen3 (same as in training)
         tokenizer = get_chat_template(
             tokenizer,
-            chat_template="phi-4",
+            chat_template="qwen-3",
         )
 
         # Enable inference mode for 2x faster inference
