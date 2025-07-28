@@ -16,7 +16,7 @@ LR=(1e-5 1e-6)
 WEIGHT_DECAY=(0 0.01)
 SCHEDULER=("cosine" "linear")
 EPOCHS=(1 3)
-USE_GPUS=(0 1 2 3 4 5 6 7)
+USE_GPUS=(1 2 3)
 
 # Collect all model directories
 declare -a model_dirs
