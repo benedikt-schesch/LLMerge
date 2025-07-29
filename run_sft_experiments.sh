@@ -12,7 +12,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Configuration arrays
-LR=(1e-5 1e-6 5e-5 5e-6)
+LR=(1e-5 1e-6 1e-4)
 WEIGHT_DECAY=(0 0.01)
 SCHEDULER=("cosine" "linear")
 EPOCHS=(1 3)
