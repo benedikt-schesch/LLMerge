@@ -107,12 +107,12 @@ cat << 'EOF' > "$TEX"
 \centering
 \begin{tabular}{l l l l r r r r}
 \toprule
-Epochs & LR & Weight decay & Scheduler & Correct merges & Semantic merges & Raising conflict & Valid Java markdown \\
+Epochs & LR & Weight decay & Scheduler & Correct merges & Semantic merges & Raising conflict & Invalid markdown \\
 \midrule
 EOF
 
 # Markdown header
-echo "| Epochs | LR | Weight decay | Scheduler | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |" > "$MD"
+echo "| Epochs | LR | Weight decay | Scheduler | Correct merges | Semantic merges | Raising conflict | Invalid markdown |" > "$MD"
 echo "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |" >> "$MD"
 
 # Rows, bold best
@@ -126,12 +126,14 @@ for dir in "${model_dirs[@]}"; do
   read valid raise semantic correct < <(
     awk '/valid Java markdown format:/ {v=$NF; sub(/%/,"",v)} /raising merge conflict:/ {r=$NF; sub(/%/,"",r)} /semantically correctly resolved merges:/ {s=$NF; sub(/%/,"",s)} /correctly resolved merges:/ {c=$NF; sub(/%/,"",c)} END {print v, r, s, c}' "$lf"
   )
+  # Calculate invalid markdown as 100 - valid
+  invalid=$((100 - valid))
   if [[ "$dir" == "$best_dir" ]]; then
-    echo "${epochs_val} & ${lr_val} & ${wd_val} & ${sched_val} & \\textbf{${correct}}\\% & \\textbf{${semantic}}\\% & \\textbf{${raise}}\\% & \\textbf{${valid}}\\% \\\\" >> "$TEX"
-    echo "| ${epochs_val} | ${lr_val} | ${wd_val} | ${sched_val} | **${correct}%** | **${semantic}%** | **${raise}%** | **${valid}%** |" >> "$MD"
+    echo "${epochs_val} & ${lr_val} & ${wd_val} & ${sched_val} & \\textbf{${correct}}\\% & \\textbf{${semantic}}\\% & \\textbf{${raise}}\\% & \\textbf{${invalid}}\\% \\\\" >> "$TEX"
+    echo "| ${epochs_val} | ${lr_val} | ${wd_val} | ${sched_val} | **${correct}%** | **${semantic}%** | **${raise}%** | **${invalid}%** |" >> "$MD"
   else
-    echo "${epochs_val} & ${lr_val} & ${wd_val} & ${sched_val} & ${correct}\\% & ${semantic}\\% & ${raise}\\% & ${valid}\\% \\\\" >> "$TEX"
-    echo "| ${epochs_val} | ${lr_val} | ${wd_val} | ${sched_val} | ${correct}% | ${semantic}% | ${raise}% | ${valid}% |" >> "$MD"
+    echo "${epochs_val} & ${lr_val} & ${wd_val} & ${sched_val} & ${correct}\\% & ${semantic}\\% & ${raise}\\% & ${invalid}\\% \\\\" >> "$TEX"
+    echo "| ${epochs_val} | ${lr_val} | ${wd_val} | ${sched_val} | ${correct}% | ${semantic}% | ${raise}% | ${invalid}% |" >> "$MD"
   fi
 done
 
