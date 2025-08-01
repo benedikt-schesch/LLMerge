@@ -126,8 +126,8 @@ for dir in "${model_dirs[@]}"; do
   read valid raise semantic correct < <(
     awk '/valid Java markdown format:/ {v=$NF; sub(/%/,"",v)} /raising merge conflict:/ {r=$NF; sub(/%/,"",r)} /semantically correctly resolved merges:/ {s=$NF; sub(/%/,"",s)} /correctly resolved merges:/ {c=$NF; sub(/%/,"",c)} END {print v, r, s, c}' "$lf"
   )
-  # Calculate invalid markdown as 100 - valid
-  invalid=$((100 - valid))
+  # Calculate invalid markdown as 100 - valid (using awk to handle decimals)
+  invalid=$(awk "BEGIN {printf \"%.2f\", 100 - $valid}")
   if [[ "$dir" == "$best_dir" ]]; then
     echo "${epochs_val} & ${lr_val} & ${wd_val} & ${sched_val} & \\textbf{${correct}}\\% & \\textbf{${semantic}}\\% & \\textbf{${raise}}\\% & \\textbf{${invalid}}\\% \\\\" >> "$TEX"
     echo "| ${epochs_val} | ${lr_val} | ${wd_val} | ${sched_val} | **${correct}%** | **${semantic}%** | **${raise}%** | **${invalid}%** |" >> "$MD"
