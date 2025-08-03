@@ -8,7 +8,6 @@ This script:
 3. Saves the trained model for later GRPO training
 """
 
-import os
 import argparse
 from pathlib import Path
 from datasets import load_from_disk
@@ -18,15 +17,9 @@ from transformers import TrainingArguments, DataCollatorForSeq2Seq
 from trl import SFTTrainer
 
 from src.variables import (
-    MODEL_NAME,
     MAX_SEQUENCE_LENGTH_SFT,
     LORA_RANK,
 )
-
-os.environ["HF_HOME"] = "/m-coriander/coriander/scheschb/.cache/"
-
-# Set WANDB project
-os.environ["WANDB_PROJECT"] = "LLMerge-SFT"
 
 
 def train_sft(
@@ -36,12 +29,12 @@ def train_sft(
 ):
     """Train a model using Supervised Fine-Tuning."""
     # Use model name from args or default from variables
-    model_name = getattr(train_args, "model_name", MODEL_NAME)
+    model_name = getattr(train_args, "model_name")
 
     # Load dataset
     output_dir = (
         output_dir
-        / model_name.replace("/", "_")
+        / model_name
         / (
             f"{train_args.run_name}_"
             f"lr{train_args.lr}_"
@@ -207,7 +200,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_name",
         type=str,
-        default=None,
+        required=True,
         help="Model name to use (overrides default from variables.py)",
     )
     args = parser.parse_args()

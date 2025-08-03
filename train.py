@@ -2,7 +2,6 @@
 """UnSloth - GRPO Training Script"""
 # pylint: disable=unused-argument
 
-import os
 import re
 import math
 import argparse
@@ -20,11 +19,6 @@ from src.variables import (
     MAX_PROMPT_LENGTH,
 )
 from src.utils import extract_code_block, normalize_java_code
-
-# Set HF_HOME to avoid re-downloading models
-os.environ["HF_HOME"] = "/m-coriander/coriander/scheschb/.cache/"
-
-os.environ["WANDB_PROJECT"] = "LLMerge"
 
 CORRECT_ANSWER_MULTIPLIER = math.sqrt(2)
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
