@@ -4,33 +4,61 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 
-A toolkit for training Large Language Models to automatically resolve merge conflicts in Java code. 🤖
+A toolkit for constructing and analyzing merge conflict datasets, and training models to automatically resolve merge conflicts in code. 🤖
+
+## Evaluation Results 🚀
+
+| Model | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |
+| --- | ---: | ---: | ---: | ---: |
+| GPT 4.1 | 44.04% | 54.09% | 3.23% | 100.00% |
+| Claude 3.7 Sonnet | 51.61% | 60.17% | 2.85% | 100.00% |
+| Llama 4 Maverick | 26.18% | 32.63% | 31.76% | 99.75% |
+| Llama 3.3 70B Instruct | 1.86% | 3.85% | 81.02% | 100.00% |
+| Gemini 2.5 Pro Preview | 46.65% | 53.35% | 8.93% | 99.88% |
+| Qwen3 235B A22B | 28.16% | 35.73% | 32.75% | 99.13% |
+| Grok 3 Beta | 8.81% | 11.66% | 81.27% | 100.00% |
+| QwQ 32B | 24.07% | 32.26% | 13.77% | 72.70% |
+| o3 | 49.63% | 58.93% | 3.10% | 100.00% |
+| Qwen3 14B | 12.90% | 16.63% | 69.48% | 99.88% |
+| Qwen3 32B | 13.15% | 16.87% | 61.17% | 99.50% |
+| Deepseek R1 Distill Qwen 1.5B | 0.00% | 0.12% | 0.00% | 77.42% |
+| Deepseek R1 Distill Llama 8B | 3.35% | 7.57% | 14.76% | 94.17% |
+| Deepseek R1 Distill Qwen 14B | 9.31% | 13.40% | 48.88% | 99.38% |
+| Deepseek R1 Distill Qwen 32B | 22.83% | 30.40% | 30.65% | 99.01% |
+| Deepseek R1 Distill Llama 70B | 25.81% | 33.00% | 29.40% | 98.88% |
+| Deepseek R1 | 45.66% | 53.60% | 8.81% | 99.50% |
+| **Ours** | **48.76%** | **58.93%** | **0.12%** | **100.00%** |
 
 ## Table of Contents
 
 - [Features ✨](#features)
 - [Prerequisites 📋](#prerequisites)
 - [Installation ⚙️](#installation)
-- [Dataset Preparation 📊](#dataset-preparation)
-- [Training 🚀](#training)
+- [Usage](#usage)
+  - [Dataset Construction 🗂️](#dataset-construction)
+  - [Training 🚀](#training)
+  - [Evaluation 📊](#evaluation)
+- [Advanced Training Methods](#advanced-training-methods)
+  - [Supervised Fine-Tuning (SFT)](#supervised-fine-tuning-sft)
+  - [GRPO Training](#grpo-training)
 - [Project Structure](#project-structure)
 - [License](#license)
 
 ## Features ✨
 
-- 🤖 Train models to resolve merge conflicts using GRPO (Gradient Reward Policy Optimization)
-- 🎯 Multiple SFT approaches: Direct SFT, Thinking-based SFT, and Knowledge Distillation
-- 🚀 Support for multiple base models including DeepSeek-R1-Distill-Qwen variants
-- ⚡ Efficient training with LoRA and UnSloth optimization
-- 🔧 Flexible system prompt injection for different training paradigms
-- 📊 Three distinct training approaches for comprehensive comparison
+- 🛠️ Build customizable merge conflict datasets from Git history
+- 📊 Compute conflict metrics and analyze resolution strategies
+- 🤖 Train and evaluate models to resolve merge conflicts in Java code
+- ⚙️ Support for multiple training approaches: GRPO, SFT, and distillation
+- 🔄 API integration for DeepSeek R1 and OpenRouter models
+- 📈 Comprehensive evaluation framework with multiple metrics
 
 ## Prerequisites 📋
 
 - Python 3.12 or later
 - Git
-- CUDA-enabled GPU
-- Pre-built merge conflict datasets (see [Dataset Preparation](#dataset-preparation))
+- CUDA-enabled GPU (optional, for training)
+- API keys for DeepSeek or OpenRouter (optional, for API-based models)
 
 ## Installation ⚙️
 
@@ -63,7 +91,9 @@ A toolkit for training Large Language Models to automatically resolve merge conf
 
 ## Dataset Preparation 📊
 
-LLMerge requires pre-built merge conflict datasets for training and evaluation. These datasets should be created using [Merge-Bench-Builder](https://github.com/benedikt-schesch/Merge-Bench-Builder), which provides tools for extracting merge conflicts from Git repositories.
+### Dataset Construction 🗂️
+
+#### Small Test Run
 
 ### Expected Dataset Structure
 
@@ -103,7 +133,9 @@ LLMerge expects datasets to be in HuggingFace format with the conversation alrea
 
 Datasets created by Merge-Bench-Builder will already be in the correct format.
 
-## Training 🚀
+### Training 🚀
+
+#### GRPO Training (Default)
 
 LLMerge supports three distinct training approaches for comprehensive comparison:
 
@@ -158,13 +190,13 @@ Model evaluation is handled by the [Merge-Bench](https://github.com/benedikt-sch
 ├── train.py                     # GRPO training script
 ├── sft_train.py                 # Supervised fine-tuning script
 ├── README.md
+├── README_SFT.md             # SFT-specific documentation
 └── LICENSE
 ```
 
 ## Configuration
 
 Key configuration variables in `src/variables.py`:
-- `MODEL_NAME`: Base model for training
 - `MAX_SEQUENCE_LENGTH`: Maximum token length
 - `LORA_RANK`: LoRA rank for efficient fine-tuning
 - `SYSTEM_PROMPT`: System prompt for the model

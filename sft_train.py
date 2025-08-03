@@ -8,23 +8,18 @@ This script:
 3. Saves the trained model for later GRPO training
 """
 
-import os
 import argparse
 from pathlib import Path
 from datasets import load_from_disk
 from unsloth import FastLanguageModel, is_bfloat16_supported
-from transformers import TrainingArguments
+from unsloth.chat_templates import get_chat_template
+from transformers import TrainingArguments, DataCollatorForSeq2Seq
 from trl import SFTTrainer
 
 from src.variables import (
-    MODEL_NAME,
     MAX_SEQUENCE_LENGTH_SFT,
     LORA_RANK,
-    SYSTEM_PROMPT,
 )
-
-# Set WANDB project
-os.environ["WANDB_PROJECT"] = "LLMerge-SFT"
 
 
 def train_sft(
@@ -34,12 +29,12 @@ def train_sft(
 ):
     """Train a model using Supervised Fine-Tuning."""
     # Use model name from args or default from variables
-    model_name = getattr(train_args, "model_name", MODEL_NAME)
+    model_name = getattr(train_args, "model_name")
 
     # Load dataset
     output_dir = (
         output_dir
-        / model_name.replace("/", "_")
+        / model_name
         / (
             f"{train_args.run_name}_"
             f"lr{train_args.lr}_"
@@ -52,26 +47,8 @@ def train_sft(
     print(f"Loading dataset from {dataset_path}...")
     dataset = load_from_disk(dataset_path)["train"]
 
-    # Add system prompt if requested (skip for no_thinking mode)
-    if train_args.add_system_prompt and not getattr(train_args, "no_thinking", False):
-
-        def add_system_prompt(example):
-            """Add system prompt to the conversation."""
-            if "prompt" in example and isinstance(example["prompt"], list):
-                # Check if system prompt already exists
-                if not (
-                    example["prompt"] and example["prompt"][0].get("role") == "system"
-                ):
-                    # Add system prompt at the beginning
-                    example["prompt"] = [
-                        {"role": "system", "content": SYSTEM_PROMPT}
-                    ] + example["prompt"]
-            return example
-
-        print("Adding system prompts to dataset...")
-        dataset = dataset.map(add_system_prompt)
-    elif getattr(train_args, "no_thinking", False):
-        print("No-thinking mode enabled - skipping system prompt")
+    # No preprocessing needed - use raw question/answer pairs directly
+    print("Using simplified question-answer format...")
 
     # Initialize model
     print(f"Loading model {model_name}...")
@@ -79,7 +56,12 @@ def train_sft(
         model_name=model_name,
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
         load_in_4bit=True,
-        max_lora_rank=LORA_RANK,
+    )
+
+    # Set up chat template for Qwen3
+    tokenizer = get_chat_template(
+        tokenizer,
+        chat_template="qwen-3",
     )
 
     # Set up LoRA
@@ -96,8 +78,12 @@ def train_sft(
             "down_proj",
         ],
         lora_alpha=LORA_RANK,
+        lora_dropout=0,  # Optimized for 0
+        bias="none",  # Optimized for "none"
         use_gradient_checkpointing="unsloth",
         random_state=3407,
+        use_rslora=False,
+        loftq_config=None,
     )
 
     # Training arguments
@@ -118,6 +104,25 @@ def train_sft(
         report_to="wandb",
     )
 
+    # Format dataset using simple question/answer pairs
+    def formatting_prompts_func(examples):
+        """Format prompts using simple question-answer pairs."""
+        texts = []
+        for question, answer in zip(examples["question"], examples["answer"]):
+            # Create simple conversation: user question -> assistant answer
+            conversation = [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer},
+            ]
+            text = tokenizer.apply_chat_template(
+                conversation, tokenize=False, enable_thinking=False
+            )
+            texts.append(text)
+        return {"text": texts}
+
+    print("Formatting dataset with simple question-answer pairs...")
+    dataset = dataset.map(formatting_prompts_func, batched=True, num_proc=2)
+
     # Initialize SFT Trainer
     trainer = SFTTrainer(  # pylint: disable=unexpected-keyword-arg
         model=model,
@@ -126,7 +131,7 @@ def train_sft(
         train_dataset=dataset,
         dataset_text_field="text",
         max_seq_length=MAX_SEQUENCE_LENGTH_SFT,
-        dataset_num_proc=2,
+        data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         packing=False,  # Can make training 5x faster for short sequences.
     )
 
@@ -153,7 +158,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="merges/repos_reaper_java_train/dataset_sft",
+        default="merges/repos_reaper_java_train/dataset",
         help="Path to the SFT dataset",
     )
     parser.add_argument(
@@ -187,11 +192,6 @@ if __name__ == "__main__":
         help="LR Scheduler Type",
     )
     parser.add_argument(
-        "--add_system_prompt",
-        action="store_true",
-        help="Add system prompt to dataset (for thinking-based training)",
-    )
-    parser.add_argument(
         "--run_name",
         type=str,
         default="sft_model",
@@ -200,13 +200,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_name",
         type=str,
-        default=None,
+        required=True,
         help="Model name to use (overrides default from variables.py)",
-    )
-    parser.add_argument(
-        "--no_thinking",
-        action="store_true",
-        help="Disable thinking mode for Qwen3 models (direct SFT without reasoning)",
     )
     args = parser.parse_args()
 

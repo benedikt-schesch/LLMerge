@@ -2,7 +2,6 @@
 """UnSloth - GRPO Training Script"""
 # pylint: disable=unused-argument
 
-import os
 import re
 import math
 import argparse
@@ -20,9 +19,6 @@ from src.variables import (
     SYSTEM_PROMPT,
 )
 from src.utils import extract_code_block, normalize_java_code
-
-
-os.environ["WANDB_PROJECT"] = "LLMerge"
 
 CORRECT_ANSWER_MULTIPLIER = math.sqrt(2)
 JAVA_MARKDOWN_PATTERN = r"```java\n(.*?)\n```"
