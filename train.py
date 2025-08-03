@@ -262,7 +262,7 @@ if __name__ == "__main__":
         save_steps=100,
         max_grad_norm=0.2,
         report_to="wandb",
-        output_dir=f"checkpoints/{MODEL_NAME}",
+        output_dir="checkpoints",
     )
 
     trainer = GRPOTrainer(

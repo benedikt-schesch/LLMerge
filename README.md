@@ -1,207 +1,202 @@
-# LLMerge
+---
+base_model: unsloth/deepseek-r1-distill-qwen-14b-bnb-4bit
+library_name: peft
+---
 
-![CI](https://github.com/benedikt-schesch/LLMerge/actions/workflows/ci.yml/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)
+# Model Card for Model ID
 
-A toolkit for constructing and analyzing merge conflict datasets, and training models to automatically resolve merge conflicts in code. 🤖
+<!-- Provide a quick summary of what the model is/does. -->
 
-## Evaluation Results 🚀
 
-| Model | Correct merges | Semantic merges | Raising conflict | Valid Java markdown |
-| --- | ---: | ---: | ---: | ---: |
-| GPT 4.1 | 44.04% | 54.09% | 3.23% | 100.00% |
-| Claude 3.7 Sonnet | 51.61% | 60.17% | 2.85% | 100.00% |
-| Llama 4 Maverick | 26.18% | 32.63% | 31.76% | 99.75% |
-| Llama 3.3 70B Instruct | 1.86% | 3.85% | 81.02% | 100.00% |
-| Gemini 2.5 Pro Preview | 46.65% | 53.35% | 8.93% | 99.88% |
-| Qwen3 235B A22B | 28.16% | 35.73% | 32.75% | 99.13% |
-| Grok 3 Beta | 8.81% | 11.66% | 81.27% | 100.00% |
-| QwQ 32B | 24.07% | 32.26% | 13.77% | 72.70% |
-| o3 | 49.63% | 58.93% | 3.10% | 100.00% |
-| Qwen3 14B | 12.90% | 16.63% | 69.48% | 99.88% |
-| Qwen3 32B | 13.15% | 16.87% | 61.17% | 99.50% |
-| Deepseek R1 Distill Qwen 1.5B | 0.00% | 0.12% | 0.00% | 77.42% |
-| Deepseek R1 Distill Llama 8B | 3.35% | 7.57% | 14.76% | 94.17% |
-| Deepseek R1 Distill Qwen 14B | 9.31% | 13.40% | 48.88% | 99.38% |
-| Deepseek R1 Distill Qwen 32B | 22.83% | 30.40% | 30.65% | 99.01% |
-| Deepseek R1 Distill Llama 70B | 25.81% | 33.00% | 29.40% | 98.88% |
-| Deepseek R1 | 45.66% | 53.60% | 8.81% | 99.50% |
-| **Ours** | **48.76%** | **58.93%** | **0.12%** | **100.00%** |
 
-## Table of Contents
+## Model Details
 
-- [Features ✨](#features)
-- [Prerequisites 📋](#prerequisites)
-- [Installation ⚙️](#installation)
-- [Usage](#usage)
-  - [Dataset Construction 🗂️](#dataset-construction)
-  - [Training 🚀](#training)
-  - [Evaluation 📊](#evaluation)
-- [Advanced Training Methods](#advanced-training-methods)
-  - [Supervised Fine-Tuning (SFT)](#supervised-fine-tuning-sft)
-  - [GRPO Training](#grpo-training)
-- [Project Structure](#project-structure)
-- [License](#license)
+### Model Description
 
-## Features ✨
+<!-- Provide a longer summary of what this model is. -->
 
-- 🛠️ Build customizable merge conflict datasets from Git history
-- 📊 Compute conflict metrics and analyze resolution strategies
-- 🤖 Train and evaluate models to resolve merge conflicts in Java code
-- ⚙️ Support for multiple training approaches: GRPO, SFT, and distillation
-- 🔄 API integration for DeepSeek R1 and OpenRouter models
-- 📈 Comprehensive evaluation framework with multiple metrics
 
-## Prerequisites 📋
 
-- Python 3.12 or later
-- Git
-- CUDA-enabled GPU (optional, for training)
-- API keys for DeepSeek or OpenRouter (optional, for API-based models)
+- **Developed by:** [More Information Needed]
+- **Funded by [optional]:** [More Information Needed]
+- **Shared by [optional]:** [More Information Needed]
+- **Model type:** [More Information Needed]
+- **Language(s) (NLP):** [More Information Needed]
+- **License:** [More Information Needed]
+- **Finetuned from model [optional]:** [More Information Needed]
 
-## Installation ⚙️
+### Model Sources [optional]
 
-1. Clone the repository:
+<!-- Provide the basic links for the model. -->
 
-   ```bash
-   git clone https://github.com/benedikt-schesch/LLMerge.git
-   cd LLMerge
-   ```
+- **Repository:** [More Information Needed]
+- **Paper [optional]:** [More Information Needed]
+- **Demo [optional]:** [More Information Needed]
 
-2. Create and activate a virtual environment:
+## Uses
 
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
+<!-- Address questions around how the model is intended to be used, including the foreseeable users of the model and those affected by the model. -->
 
-3. Install dependencies:
+### Direct Use
 
-   ```bash
-   pip install --upgrade pip
-   pip install uv
-   uv sync
-   ```
+<!-- This section is for the model use without fine-tuning or plugging into a larger ecosystem/app. -->
 
-> **Tip:** If you encounter CUDA issues, try:
-> ```bash
-> uv pip install -U transformers
-> ```
+[More Information Needed]
 
-## Dataset Preparation 📊
+### Downstream Use [optional]
 
-### Dataset Construction 🗂️
+<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
 
-#### Small Test Run
+[More Information Needed]
 
-### Expected Dataset Structure
+### Out-of-Scope Use
 
-Datasets should be in HuggingFace format with the following structure:
-```
-merges/
-└── dataset_name/
-    └── dataset/
-        ├── train/
-        └── test/
-```
+<!-- This section addresses misuse, malicious use, and uses that the model will not work well for. -->
 
-### Creating Datasets
+[More Information Needed]
 
-1. Clone and set up Merge-Bench-Builder:
-   ```bash
-   git clone https://github.com/benedikt-schesch/Merge-Bench-Builder.git
-   cd Merge-Bench-Builder
-   ```
+## Bias, Risks, and Limitations
 
-2. Build your dataset (e.g., Java dataset with 1000 repositories):
-   ```bash
-   ./dataset_build_scripts/build_dataset_reaper_java_1000.sh -g -m -b
-   ```
+<!-- This section is meant to convey both technical and sociotechnical limitations. -->
 
-3. Copy or link the generated dataset to your LLMerge directory:
-   ```bash
-   cp -r merges/repos_reaper_java_train /path/to/LLMerge/merges/
-   ```
+[More Information Needed]
 
-### Dataset Format
+### Recommendations
 
-LLMerge expects datasets to be in HuggingFace format with the conversation already formatted. The datasets should include:
-- System prompts
-- User queries with merge conflicts
-- Expected resolutions
+<!-- This section is meant to convey recommendations with respect to the bias, risk, and technical limitations. -->
 
-Datasets created by Merge-Bench-Builder will already be in the correct format.
+Users (both direct and downstream) should be made aware of the risks, biases and limitations of the model. More information needed for further recommendations.
 
-### Training 🚀
+## How to Get Started with the Model
 
-#### GRPO Training (Default)
+Use the code below to get started with the model.
 
-LLMerge supports three distinct training approaches for comprehensive comparison:
+[More Information Needed]
 
-### 1. GRPO Training (Reinforcement Learning)
+## Training Details
 
-GRPO uses reward functions to train models with thinking-based reasoning:
+### Training Data
 
-```bash
-python3 train.py --epochs 1500 --learning_rate 5e-5
-```
+<!-- This should link to a Dataset Card, perhaps with a short stub of information on what the training data is all about as well as documentation related to data pre-processing or additional filtering. -->
 
-### 2. Direct SFT (Imitation Learning)
+[More Information Needed]
 
-Direct supervised fine-tuning on human-resolved conflicts without reasoning:
+### Training Procedure
 
-```bash
-# For DeepSeek model with thinking (original approach)
-python3 sft_train.py --dataset merges/repos_reaper_java_train/dataset
+<!-- This relates heavily to the Technical Specifications. Content here should link to that section when it is relevant to the training procedure. -->
 
-# For Qwen3-14B without thinking (new approach)
-./run_direct_sft_experiments.sh
-```
+#### Preprocessing [optional]
 
-See [README_DIRECT_SFT.md](README_DIRECT_SFT.md) for details on the Qwen3 direct SFT approach.
+[More Information Needed]
 
-### 3. Knowledge Distillation (API-based)
 
-Train on outputs from DeepSeek R1 API (requires separate data preparation):
+#### Training Hyperparameters
 
-```bash
-# First prepare distillation dataset
-python3 src/deepseek_sft_data.py --dataset_path merges/repos_reaper_java_train/dataset
+- **Training regime:** [More Information Needed] <!--fp32, fp16 mixed precision, bf16 mixed precision, bf16 non-mixed precision, fp16 non-mixed precision, fp8 mixed precision -->
 
-# Then train on distilled data
-python3 sft_train.py --dataset merges/repos_reaper_java_train/dataset_sft --add_system_prompt
-```
+#### Speeds, Sizes, Times [optional]
+
+<!-- This section provides information about throughput, start/end time, checkpoint size if relevant, etc. -->
+
+[More Information Needed]
 
 ## Evaluation
 
-Model evaluation is handled by the [Merge-Bench](https://github.com/benedikt-schesch/Merge-Bench) repository, which provides comprehensive evaluation across multiple programming languages including Java.
+<!-- This section describes the evaluation protocols and provides the results. -->
 
-## Project Structure
+### Testing Data, Factors & Metrics
 
-```
-.
-├── src/
-│   ├── model_inference.py       # Model inference utilities
-│   ├── prepare_sft_dataset.py   # SFT data preparation
-│   ├── deepseek_sft_data.py     # DeepSeek API integration
-│   ├── utils.py                 # Utility functions
-│   └── variables.py             # Configuration variables
-├── train.py                     # GRPO training script
-├── sft_train.py                 # Supervised fine-tuning script
-├── README.md
-├── README_SFT.md             # SFT-specific documentation
-└── LICENSE
-```
+#### Testing Data
 
-## Configuration
+<!-- This should link to a Dataset Card if possible. -->
 
-Key configuration variables in `src/variables.py`:
-- `MAX_SEQUENCE_LENGTH`: Maximum token length
-- `LORA_RANK`: LoRA rank for efficient fine-tuning
-- `SYSTEM_PROMPT`: System prompt for the model
-- `QUERY_PROMPT`: Prompt template for merge conflicts
+[More Information Needed]
 
-## License
+#### Factors
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+<!-- These are the things the evaluation is disaggregating by, e.g., subpopulations or domains. -->
+
+[More Information Needed]
+
+#### Metrics
+
+<!-- These are the evaluation metrics being used, ideally with a description of why. -->
+
+[More Information Needed]
+
+### Results
+
+[More Information Needed]
+
+#### Summary
+
+
+
+## Model Examination [optional]
+
+<!-- Relevant interpretability work for the model goes here -->
+
+[More Information Needed]
+
+## Environmental Impact
+
+<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
+
+Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) presented in [Lacoste et al. (2019)](https://arxiv.org/abs/1910.09700).
+
+- **Hardware Type:** [More Information Needed]
+- **Hours used:** [More Information Needed]
+- **Cloud Provider:** [More Information Needed]
+- **Compute Region:** [More Information Needed]
+- **Carbon Emitted:** [More Information Needed]
+
+## Technical Specifications [optional]
+
+### Model Architecture and Objective
+
+[More Information Needed]
+
+### Compute Infrastructure
+
+[More Information Needed]
+
+#### Hardware
+
+[More Information Needed]
+
+#### Software
+
+[More Information Needed]
+
+## Citation [optional]
+
+<!-- If there is a paper or blog post introducing the model, the APA and Bibtex information for that should go in this section. -->
+
+**BibTeX:**
+
+[More Information Needed]
+
+**APA:**
+
+[More Information Needed]
+
+## Glossary [optional]
+
+<!-- If relevant, include terms and calculations in this section that can help readers understand the model or model card. -->
+
+[More Information Needed]
+
+## More Information [optional]
+
+[More Information Needed]
+
+## Model Card Authors [optional]
+
+[More Information Needed]
+
+## Model Card Contact
+
+[More Information Needed]
+### Framework versions
+
+- PEFT 0.15.1

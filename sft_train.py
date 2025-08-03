@@ -100,7 +100,7 @@ def train_sft(
         weight_decay=train_args.weight_decay,
         lr_scheduler_type=train_args.lr_scheduler_type,
         seed=3407,
-        output_dir="outputs",
+        output_dir="checkpoints_sft",
         report_to="wandb",
     )
 
@@ -164,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="checkpoints",
+        default="checkpoints_sft",
         help="Directory to save the trained model",
     )
     parser.add_argument(

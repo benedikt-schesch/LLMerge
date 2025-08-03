@@ -21,6 +21,7 @@ debug.txt
 grpo_trainer_lora_model
 query_cache/
 checkpoints/
+checkpoints_sft/
 
 # Compiled class file
 *.class
