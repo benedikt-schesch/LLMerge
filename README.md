@@ -1,202 +1,109 @@
----
-base_model: unsloth/deepseek-r1-distill-qwen-14b-bnb-4bit
-library_name: peft
----
+# LLMergeJ
 
-# Model Card for Model ID
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 
-<!-- Provide a quick summary of what the model is/does. -->
+A specialized language model fine-tuned for merge conflict resolution in Java code. LLMergeJ is trained to understand and resolve complex merge conflicts with high accuracy. 🤖
 
+## Table of Contents
 
+- [Features ✨](#features)
+- [Prerequisites 📋](#prerequisites)
+- [Installation ⚙️](#installation)
+- [Usage](#usage)
+- [Training](#training)
+- [Model Performance](#model-performance)
+- [Project Structure](#project-structure)
+- [License](#license)
 
-## Model Details
+## Features ✨
 
-### Model Description
+- 🎯 Specialized fine-tuning for Java merge conflict resolution
+- 🚀 Built on DeepSeek-R1-Distill-Qwen-14B architecture
+- 📊 Achieves 48.8% exact match accuracy on Java merge conflicts
+- ⚡ Efficient training with Unsloth optimization
+- 🔄 Support for supervised fine-tuning (SFT) with custom datasets
+- 📈 Comprehensive evaluation metrics and performance tracking
 
-<!-- Provide a longer summary of what this model is. -->
+## Prerequisites 📋
 
+- [uv](https://docs.astral.sh/uv/) - Python package manager
+- [Unsloth prerequisites](https://github.com/unslothai/unsloth#installation) - For efficient training and inference
 
+## Installation ⚙️
 
-- **Developed by:** [More Information Needed]
-- **Funded by [optional]:** [More Information Needed]
-- **Shared by [optional]:** [More Information Needed]
-- **Model type:** [More Information Needed]
-- **Language(s) (NLP):** [More Information Needed]
-- **License:** [More Information Needed]
-- **Finetuned from model [optional]:** [More Information Needed]
+1. Clone the repository:
 
-### Model Sources [optional]
+   ```bash
+   git clone https://github.com/benedikt-schesch/LLMerge.git
+   cd LLMergeJ
+   ```
 
-<!-- Provide the basic links for the model. -->
+2. Install dependencies:
 
-- **Repository:** [More Information Needed]
-- **Paper [optional]:** [More Information Needed]
-- **Demo [optional]:** [More Information Needed]
+   ```bash
+   uv sync
+   ```
 
-## Uses
+## Usage
 
-<!-- Address questions around how the model is intended to be used, including the foreseeable users of the model and those affected by the model. -->
+### Training a Model
 
-### Direct Use
+Train LLMergeJ on merge conflict data:
 
-<!-- This section is for the model use without fine-tuning or plugging into a larger ecosystem/app. -->
+```bash
+# Basic training
+python train.py
+```
 
-[More Information Needed]
+### Supervised Fine-Tuning (SFT)
 
-### Downstream Use [optional]
+Run supervised fine-tuning experiments:
 
-<!-- This section is for the model use when fine-tuned for a task, or when plugged into a larger ecosystem/app -->
+```bash
+# Single SFT run
+python sft_train.py --model_name "unsloth/deepseek-r1-distill-qwen-14b-bnb-4bit" --dataset_path "merges/repos_reaper_java_test/dataset/"
 
-[More Information Needed]
+# Batch SFT experiments with hyperparameter grid
+./run_sft_experiments.sh
+```
 
-### Out-of-Scope Use
+### Training Parameters
 
-<!-- This section addresses misuse, malicious use, and uses that the model will not work well for. -->
+Key training parameters you can customize:
 
-[More Information Needed]
+- `--model_name`: Base model to fine-tune (default: "unsloth/deepseek-r1-distill-qwen-14b-bnb-4bit")
+- `--dataset_path`: Path to training dataset
+- `--max_seq_length`: Maximum sequence length (default: 2048)
+- `--learning_rate`: Learning rate (default: 2e-4)
+- `--num_train_epochs`: Number of training epochs (default: 1)
+- `--per_device_train_batch_size`: Batch size per device (default: 2)
+- `--gradient_accumulation_steps`: Gradient accumulation steps (default: 4)
 
-## Bias, Risks, and Limitations
+## Training
 
-<!-- This section is meant to convey both technical and sociotechnical limitations. -->
+### Training Scripts
 
-[More Information Needed]
+- `train.py`: Main training script with configurable parameters
+- `sft_train.py`: Supervised fine-tuning with evaluation
+- `run_sft_experiments.sh`: Batch training with hyperparameter grid search
 
-### Recommendations
+## Project Structure
 
-<!-- This section is meant to convey recommendations with respect to the bias, risk, and technical limitations. -->
-
-Users (both direct and downstream) should be made aware of the risks, biases and limitations of the model. More information needed for further recommendations.
-
-## How to Get Started with the Model
-
-Use the code below to get started with the model.
-
-[More Information Needed]
-
-## Training Details
-
-### Training Data
-
-<!-- This should link to a Dataset Card, perhaps with a short stub of information on what the training data is all about as well as documentation related to data pre-processing or additional filtering. -->
-
-[More Information Needed]
-
-### Training Procedure
-
-<!-- This relates heavily to the Technical Specifications. Content here should link to that section when it is relevant to the training procedure. -->
-
-#### Preprocessing [optional]
-
-[More Information Needed]
-
-
-#### Training Hyperparameters
-
-- **Training regime:** [More Information Needed] <!--fp32, fp16 mixed precision, bf16 mixed precision, bf16 non-mixed precision, fp16 non-mixed precision, fp8 mixed precision -->
-
-#### Speeds, Sizes, Times [optional]
-
-<!-- This section provides information about throughput, start/end time, checkpoint size if relevant, etc. -->
-
-[More Information Needed]
-
-## Evaluation
-
-<!-- This section describes the evaluation protocols and provides the results. -->
-
-### Testing Data, Factors & Metrics
-
-#### Testing Data
-
-<!-- This should link to a Dataset Card if possible. -->
-
-[More Information Needed]
-
-#### Factors
-
-<!-- These are the things the evaluation is disaggregating by, e.g., subpopulations or domains. -->
-
-[More Information Needed]
-
-#### Metrics
-
-<!-- These are the evaluation metrics being used, ideally with a description of why. -->
-
-[More Information Needed]
-
-### Results
-
-[More Information Needed]
-
-#### Summary
-
-
-
-## Model Examination [optional]
-
-<!-- Relevant interpretability work for the model goes here -->
-
-[More Information Needed]
-
-## Environmental Impact
-
-<!-- Total emissions (in grams of CO2eq) and additional considerations, such as electricity usage, go here. Edit the suggested text below accordingly -->
-
-Carbon emissions can be estimated using the [Machine Learning Impact calculator](https://mlco2.github.io/impact#compute) presented in [Lacoste et al. (2019)](https://arxiv.org/abs/1910.09700).
-
-- **Hardware Type:** [More Information Needed]
-- **Hours used:** [More Information Needed]
-- **Cloud Provider:** [More Information Needed]
-- **Compute Region:** [More Information Needed]
-- **Carbon Emitted:** [More Information Needed]
-
-## Technical Specifications [optional]
-
-### Model Architecture and Objective
-
-[More Information Needed]
-
-### Compute Infrastructure
-
-[More Information Needed]
-
-#### Hardware
-
-[More Information Needed]
-
-#### Software
-
-[More Information Needed]
-
-## Citation [optional]
-
-<!-- If there is a paper or blog post introducing the model, the APA and Bibtex information for that should go in this section. -->
-
-**BibTeX:**
-
-[More Information Needed]
-
-**APA:**
-
-[More Information Needed]
-
-## Glossary [optional]
-
-<!-- If relevant, include terms and calculations in this section that can help readers understand the model or model card. -->
-
-[More Information Needed]
-
-## More Information [optional]
-
-[More Information Needed]
-
-## Model Card Authors [optional]
-
-[More Information Needed]
-
-## Model Card Contact
-
-[More Information Needed]
-### Framework versions
-
-- PEFT 0.15.1
+```
+.
+├── train.py                    # Main training script
+├── sft_train.py               # Supervised fine-tuning script
+├── run_sft_experiments.sh     # Batch training experiments
+├── src/                       # Core source code
+│   ├── utils.py              # Utility functions
+│   └── variables.py          # Configuration variables
+├── checkpoints/              # Model checkpoints (created during training)
+├── pyproject.toml           # Project configuration
+├── README.md                # This file
+└── LICENSE                  # MIT License
+```
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
