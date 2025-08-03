@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/benedikt-schesch/Merge-Bench-Builder/actions/workflows/ci.yml/badge.svg)](https://github.com/benedikt-schesch/LLMerge/actions/workflows/ci.yml)
 
 A specialized language model fine-tuned for merge conflict resolution in Java code. LLMergeJ is trained to understand and resolve complex merge conflicts with high accuracy. 🤖
 
