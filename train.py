@@ -56,8 +56,6 @@ BLOCK_COMMENT_RE = re.compile(r"/\*[\s\S]*?\*/")
 LINE_COMMENT_RE = re.compile(r"//.*")
 WHITESPACE_RE = re.compile(r"\s+")
 
-CONFLICT_MARKERS = ["<<<<<<<", "=======", "|||||||", ">>>>>>>"]
-
 # Pre-compile patterns
 JAVA_MARKDOWN_RE = re.compile(r"```java\n(.*?)\n```", re.DOTALL)
 THINKING_RE = re.compile(r"^(?:[\s\S]*?)\n</think>\n(?:[\s\S]*)$", re.DOTALL)
